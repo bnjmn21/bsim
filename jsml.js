@@ -207,47 +207,59 @@ class Signals {
                 this.calledWhileListening = false;
                 this.value = value;
             }
+
             set(value) {
                 this.value = value;
             }
+
             get() {
                 if (this.listening)
                     this.calledWhileListening = true;
                 return this.value;
             }
+
             isDirty() {
                 return false;
             }
+
             listenForCalls() {
                 this.listening = true;
                 this.calledWhileListening = false;
             }
+
             hasGottenCalls() {
                 this.listening = false;
                 return this.calledWhileListening;
             }
+
         };
+
         this.Computed = class Computed {
             constructor(computeFn) {
                 this.listening = false;
                 this.calledWhileListening = false;
                 this.computeFn = computeFn;
             }
+
             set(value) {
                 this.value = value;
             }
+
             get() {
                 if (this.listening)
                     this.calledWhileListening = true;
                 return this.value;
             }
+
             isDirty() {
                 return false;
             }
+
             listenForCalls() {
                 this.listening = true;
                 this.calledWhileListening = false;
             }
+            
             hasGottenCalls() {
                 this.listening = false;
                 return this.calledWhileListening;
