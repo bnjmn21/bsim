@@ -1,0 +1,40 @@
+:root {
+    --bg0: #111;
+    --fc: #ddd;
+}
+
+body {
+    margin: 0;
+    background-color: var(--bg0);
+    height: 100dvh;
+    color: var(--fc);
+}
+
+#main-canvas {
+    position: absolute;
+}
+
+#dom2d-canvas {
+    position: absolute;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.dom2d-element {
+    position: absolute;
+    display: block;
+    width: 0;
+    height: 0;
+}
+
+.test {
+    transform: translate(-50%, -100%);
+    border-radius: 5px;
+    border: 1px solid #555;
+    background-color: #222;
+    padding: 1em;
+    display: block;
+    width: fit-content;
+}
