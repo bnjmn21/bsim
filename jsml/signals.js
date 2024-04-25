@@ -1,31 +1,28 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.Signals = exports.isSignal = void 0;
-function isSignal(signal) {
+export function isSignal(signal) {
     if (signal instanceof Value || signal instanceof Computed) {
         return true;
     }
     return false;
 }
-exports.isSignal = isSignal;
 class Value {
     constructor(signalsInstance, value) {
         this.listening = false;
         this.calledWhileListening = false;
         this.childSignals = [];
         this.changed = false;
-        this.internalSet = (value, signal) => {
-            signal.value = value;
-            for (const child of signal.childSignals) {
-                child.setDirty();
-            }
-            signal.changed = true;
-        };
+        this.effects = [];
         this.value = value;
         this.signalsInstance = signalsInstance;
     }
     set(value) {
-        this.internalSet(value, this);
+        this.value = value;
+        for (const child of this.childSignals) {
+            child.setDirty();
+        }
+        this.changed = true;
+        for (const effect of this.effects) {
+            effect();
+        }
     }
     get() {
         if (this.listening)
@@ -48,6 +45,9 @@ class Value {
         this.changed = false;
         return changed;
     }
+    addEffect(effect) {
+        this.effects.push(effect);
+    }
 }
 class Computed {
     constructor(signalsInstance, computeFn) {
@@ -56,6 +56,7 @@ class Computed {
         this.childSignals = [];
         this.dirty = false;
         this.changed = false;
+        this.effects = [];
         this.computeFn = computeFn;
         this.signalsInstance = signalsInstance;
         this.value = signalsInstance.computeAndAddToTree(this);
@@ -77,6 +78,9 @@ class Computed {
     setDirty() {
         this.dirty = true;
         this.changed = true;
+        for (const effect of this.effects) {
+            effect();
+        }
     }
     listenForCalls() {
         this.listening = true;
@@ -94,8 +98,11 @@ class Computed {
         this.changed = false;
         return changed;
     }
+    addEffect(effect) {
+        this.effects.push(effect);
+    }
 }
-class Signals {
+export class Signals {
     constructor() {
         this.signals = [];
     }
@@ -143,22 +150,23 @@ class Signals {
         }
         return !isNotRoot;
     }
-}
-exports.Signals = Signals;
-Signals.Value = Value;
-Signals.Computed = Computed;
-function directEffect(signal, fn) {
-    if (signal instanceof Value) {
-        if (signal.effects === undefined) {
-            signal.effects = [];
-            const oldSignalSet = structuredClone(signal.set);
-            signal.internalSet = (value, signal) => {
-                oldSignalSet.bind(signal, value);
-                for (const effect of signal.effects) {
-                    effect();
-                }
-            };
+    getCalledSignals(computeFn) {
+        for (const otherSignal of this.signals) {
+            otherSignal.listenForCalls();
         }
-        signal.effects.push(fn);
+        computeFn();
+        const calledSignals = [];
+        for (const otherSignal of this.signals) {
+            if (otherSignal.hasGottenCalls()) {
+                calledSignals.push(otherSignal);
+            }
+        }
+        return calledSignals;
     }
 }
+Signals.Value = Value;
+Signals.Computed = Computed;
+export function directEffect(signal, fn) {
+    signal.addEffect(fn);
+}
+export const signals = new Signals();

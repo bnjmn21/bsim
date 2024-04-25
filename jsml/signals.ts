@@ -4,7 +4,7 @@ export interface Signal<T> {
     hasGottenCalls(): boolean;
     addChild(childSignal: Computed<any>): void;
     hasChanged(): boolean;
-    effects?: (() => void)[];
+    addEffect(effect: () => void): void;
 }
 
 export function isSignal<T>(signal: T): T extends Signal<any> ? true : false {
@@ -21,7 +21,7 @@ class Value<T> implements Signal<T> {
     childSignals: Computed<any>[] = [];
     signalsInstance: Signals;
     changed: boolean = false;
-    effects?: (() => void)[];
+    effects: (() => void)[] = [];
 
     constructor(signalsInstance: Signals, value: T) {
         this.value = value;
@@ -29,15 +29,14 @@ class Value<T> implements Signal<T> {
     }
 
     set(value: T) {
-        this.internalSet(value, this);
-    }
-
-    internalSet: (value: T, signal: Value<T>) => void = (value: T, signal: Value<T>) => {
-        signal.value = value;
-        for (const child of signal.childSignals) {
+        this.value = value;
+        for (const child of this.childSignals) {
             child.setDirty();
         }
-        signal.changed = true;
+        this.changed = true;
+        for (const effect of this.effects) {
+            effect();
+        }
     }
 
     get() {
@@ -65,6 +64,10 @@ class Value<T> implements Signal<T> {
         this.changed = false;
         return changed;
     }
+
+    addEffect(effect: () => void): void {
+        this.effects.push(effect);
+    }
 }
 
 class Computed<T> implements Signal<T> {
@@ -76,7 +79,7 @@ class Computed<T> implements Signal<T> {
     dirty: boolean = false;
     changed: boolean = false;
     signalsInstance: Signals;
-    effects?: (() => void)[];
+    effects: (() => void)[] = [];
 
     constructor(signalsInstance: Signals, computeFn: () => T) {
         this.computeFn = computeFn;
@@ -103,6 +106,9 @@ class Computed<T> implements Signal<T> {
     setDirty() {
         this.dirty = true;
         this.changed = true;
+        for (const effect of this.effects) {
+            effect();
+        }
     }
 
     listenForCalls() {
@@ -123,6 +129,10 @@ class Computed<T> implements Signal<T> {
         const changed = this.changed;
         this.changed = false;
         return changed;
+    }
+
+    addEffect(effect: () => void): void {
+        this.effects.push(effect);
     }
 }
 
@@ -185,20 +195,24 @@ export class Signals {
 
         return !isNotRoot;
     }
-}
 
-function directEffect<T>(signal: Signal<T>, fn: () => void) {
-    if (signal instanceof Value) {
-        if (signal.effects === undefined) {
-            signal.effects = [];
-            const oldSignalSet = structuredClone(signal.set)
-            signal.internalSet = (value: T, signal: Signal<T>) => {
-                oldSignalSet.bind(signal, value);
-                for (const effect of signal.effects as (() => void)[]) {
-                    effect();
-                }
+    getCalledSignals(computeFn: () => any): Signal<any>[] {
+        for (const otherSignal of this.signals) {
+            otherSignal.listenForCalls();
+        }
+        computeFn();
+        const calledSignals = [];
+        for (const otherSignal of this.signals) {
+            if (otherSignal.hasGottenCalls()) {
+                calledSignals.push(otherSignal);
             }
         }
-        signal.effects.push(fn);
+        return calledSignals;
     }
 }
+
+export function directEffect<T>(signal: Signal<T>, fn: () => void) {
+    signal.addEffect(fn);
+}
+
+export const signals = new Signals();
