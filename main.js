@@ -1,7 +1,7 @@
-// Der eigentliche Code befindet sich in bsim.js
-// Tipp: VSCode hat die "Go to Definition" Funktion (standardweise [F12]), die wird hier helfen.
+import { World } from "./engine/ecs.js";
+import { bsim } from "./bsim.js";
 
-console.log(
+console.info(
     "%cBSim",
     "font-size: 3em;" +
     "border: 1px solid #7777;" +
@@ -12,8 +12,8 @@ console.log(
     "text-align: center;" +
     "padding-inline: .5em;"
 );
-console.log(
-    "%cPowered by your computer",
+console.info(
+    "%cAnything is possible!",
     "font-size: 1.5em;" +
     "width: 100%;" +
     "display: inline-block;" +

@@ -61,45 +61,71 @@
  * // Die Draw-schedule aus Plugins.default() wird über `requestAnimationFrame()` ausgeführt und blockiert daher nicht.
  * ```
  */
-class World {
-    resourceRegistry = new Registry("resource");
-    componentRegistry = new Registry("componentType", "component type");
-    entityRegistries = {};
-    scheduleRegistry = new Registry("schedule");
-    systemRegistries = {};
-    plugins = [];
+
+export type Constructor<T> = new (...args: any[]) => T;
+export type Instance<T extends Constructor<any>> = T extends Constructor<infer I> ? I : never;
+
+export type ResourceRef<T> = Reference<T, "resource", {}>;
+export type ResourceWrapper = (<R>(resource: ResourceRef<R>) => R);
+
+export type Entity<T> = T[];
+export type EntityWrapper<T extends Constructor<any>> = (<E extends Instance<T>>(component: Constructor<E>) => E) & {
+    has: (component: T) => boolean;
+    componentTypes: () => T[];
+    componentValues: () => T[];
+    components: () => [T, Instance<T>][];
+};
+
+export type Schedule = Reference<null, "schedule", {}>;
+
+export type System<T extends Constructor<any>> = (e: EntityWrapper<T>[], r: ResourceWrapper) => void;
+
+export type InternalPlugin = {result: any, fn: Plugin<any, any>, args: any[]};
+export type Plugin<T, A extends any[]> = (world: World, ...args: A) => T;
+
+export type DeepArray<T> = (T | DeepArray<T>)[];
+
+export class World {
+    resourceRegistry: Registry<any, "resource", {}> = new Registry("resource");
+    entityRegistries: Map<Constructor<any>[], Entity<any>[]> = new Map();
+    scheduleRegistry: Registry<null, "schedule", {}> = new Registry("schedule");
+    systemRegistries: Map<Constructor<any>[], Function[]>[] = [];
+    plugins: InternalPlugin[] = [];
     Setup;
+
     constructor () {
         this.Setup = this.schedule();
     }
 
-    resource(value) {
-        return this.resourceRegistry.push(value);
+    resource<T>(value: T): ResourceRef<T> {
+        return this.resourceRegistry.push(value, () => ({}));
     }
 
-    getResource(resource) {
+    getResource<T>(resource: ResourceRef<T>): T {
         return this.resourceRegistry.get(resource);
     }
 
-    getEntities(...components) {
-        const flatComponents = components.flat();
-        const componentIndices = flatComponents.map(comp =>
-            (!this.componentRegistry.checkRefAndThrow(comp)) &&
-            comp.data.index
-        );
-        const totalEntities = [];
-        for (let [registryComponents, entities] of Object.entries(this.entityRegistries)) {
-            if (containsAll(registryComponents.split(","), componentIndices.map(ci => ci.toString()))) {
-                for (let [index, entity] of Object.entries(entities)) {
-                    const world = this;
-                    const entityComponents = registryComponents.split(",").map(i => +i);
-                    const entityReference = (component) => {
-                        this.componentRegistry.checkRefAndThrow(component);
-                        return entity[entityComponents.findIndex(i => i === component.data.index)];
+    getEntities<T extends Constructor<any>>(...components: DeepArray<T>): EntityWrapper<T>[] {
+        const flatComponents = components.flat() as Constructor<any>[];
+        const totalEntities: EntityWrapper<T>[] = [];
+        for (let [registryComponents, entities] of this.entityRegistries) {
+            if (containsAll(registryComponents, flatComponents)) {
+                for (let entity of entities) {
+                    const conformingEntity = entity as Entity<Instance<T>>;
+                    const entityReference = <E extends Instance<T>>(component: Constructor<E>) => {
+                        return conformingEntity.find(v => v.constructor === component) as Instance<T>;
                     }
-                    entityReference.has = (component) => {
-                        world.componentRegistry.checkRefAndThrow(component);
-                        return entityComponents.includes(component.data.index);
+                    entityReference.has = (component: T) => {
+                        return conformingEntity.find(v => v.constructor === component) !== undefined;
+                    }
+                    entityReference.componentTypes = () => {
+                        return conformingEntity.map(v => v.constructor as T);
+                    }
+                    entityReference.componentValues = () => {
+                        return conformingEntity;
+                    }
+                    entityReference.components = () => {
+                        return conformingEntity.map<[T, Instance<T>]>(v => [v.constructor, v]);
                     }
                     totalEntities.push(entityReference);
                 }
@@ -108,90 +134,30 @@ class World {
         return totalEntities;
     }
 
-    component(...args) {
-        const flatArgs = args.flat();
-
-        if (flatArgs.every(v => typeof v === "string")) {
-            return this.componentRegistry.push({
-                    type: "object",
-                    fields: flatArgs
-                }, ref => object => {
-                        if (flatArgs.some(field => object[field] === undefined)) {
-                            throw new Error(`Component missing a field`);
-                        }
-                        return {
-                            typeRef: ref,
-                            data: object
-                        };
-                    }
-            );
-        }
-
-        if (flatArgs.length === 1 && typeof flatArgs[0] === "function") {
-            return this.componentRegistry.push({
-                    type: "function",
-                }, ref => {
-                    const refFns = object => {
-                        if (!(object instanceof flatArgs[0])) {
-                            throw new Error(`Expected class ${flatArgs[0].name}`);
-                        }
-                        return ({
-                            typeRef: ref,
-                            data: object
-                        });
-                    }
-                    refFns.new = (...objects) => {
-                        return ({
-                            typeRef: ref,
-                            data: new flatArgs[0](...objects)
-                        });
-                    }
-                    return refFns;
-                }
-            );
-        }
-
-        if (flatArgs.length === 1 && typeof flatArgs[0] === "object") {
-            const returnObj = {};
-            for (let [key, value] of Object.entries(flatArgs[0])) {
-                returnObj[key] = this.component(value);
-            }
-            return returnObj;
-        }
-
-        throw new Error(
-            "Invalid arguments. The correct syntax is:\n" +
-            "- component(...strings <arrays will automatically be flattened>)\n" +
-            "- component(class)\n" +
-            "- component(<object consisting of string lists or classes, can be nested>) <returns an object of all of the return values>"
-        );
-    }
-
-    spawn(...components) {
-        const flatComponents = components.flat();
-        const componentTypes = flatComponents.map(v => v.typeRef.index);
-        const componentData = flatComponents.map(v => v.data);
-        flatComponents.reduce((p, v) => {
+    spawn<T extends Instance<Constructor<any>>>(...components: DeepArray<T>) {
+        const flatComponents = components.flat() as Instance<Constructor<any>>[];
+        const componentTypes = flatComponents.map(v => v.constructor as Constructor<any>);
+        componentTypes.reduce((p, v) => {
             if (p.includes(v)) {
                 throw new Error("A Entity can only have one of each component");
             }
             p.push(v);
             return p;
-        }, []);
-        if (this.entityRegistries[componentTypes] === undefined) {
-            this.entityRegistries[componentTypes] = [componentData];
+        }, [] as Constructor<any>[]);
+        if (!this.entityRegistries.has(componentTypes)) {
+            this.entityRegistries.set(componentTypes, [flatComponents]);
         } else {
-            this.entityRegistries[componentTypes].push(componentData);
+            (this.entityRegistries.get(componentTypes) as Entity<any>[]).push(flatComponents);
         }
     }
 
-    schedule() {
-        const reference = this.scheduleRegistry.push(null);
-        this.systemRegistries[reference.data.index] = {};
+    schedule(): Reference<null, "schedule", {}> {
+        const reference = this.scheduleRegistry.push(null, () => ({}));
+        this.systemRegistries[reference.data.index] = new Map();
         return reference;
     }
 
-    system(schedule, ...args) {
+    system<T extends Constructor<any>>(schedule: Schedule, ...args: DeepArray<T | System<T>>) {
         const invArgs = () => new Error(
             "Invalid Arguments. Syntax:\n" +
             "- system(schedule, ...components <can be (nested) arrays>..., function)\n" +
@@ -216,16 +182,16 @@ class World {
         {
             throw invArgs();
         }
-        const flatArgs = args.flat();
+        const flatArgs = args.flat() as (T | System<T>)[];
         const components = [];
         for (let arg of flatArgs) {
-            if (this.componentRegistry.checkRef(arg)) {
-                components.push(arg.data.index);
-            } else if (typeof arg === "function" && !this.componentRegistry.checkRef(arg)) {
-                if (!this.systemRegistries[schedule.data.index][components]) {
-                    this.systemRegistries[schedule.data.index][components] = [arg];
+            if (arg.toString().startsWith("class")) {
+                components.push(arg as T);
+            } else if (typeof arg === "function") {
+                if (!this.systemRegistries[schedule.data.index].has(components)) {
+                    this.systemRegistries[schedule.data.index].set(components, [arg]);
                 } else {
-                    this.systemRegistries[schedule.data.index][components].push(arg);
+                    (this.systemRegistries[schedule.data.index].get(components) as Function[]).push(arg);
                 }
                 components.splice(0, components.length);
             } else {
@@ -237,18 +203,18 @@ class World {
         }
     }
 
-    runSchedule(schedule) {
+    runSchedule(schedule: Schedule) {
         this.scheduleRegistry.checkRefAndThrow(schedule);
         const scheduleSystems = this.systemRegistries[schedule.data.index];
-        for (let [components, systems] of Object.entries(scheduleSystems)) {
+        for (let [components, systems] of scheduleSystems) {
             let entities;
-            if (components !== "") {
-                entities = this.getEntities(components.split(",").map(id => this.componentRegistry.references[id]));
+            if (components.length !== 0) {
+                entities = this.getEntities(components);
             } else {
                 entities = this.getEntities();
             }
             for (let system of systems) {
-                system(entities, (reference) => {
+                system(entities, (reference: ResourceRef<any>) => {
                     this.resourceRegistry.checkRefAndThrow(reference);
                     return this.resourceRegistry.values[reference.data.index];
                 });
@@ -256,7 +222,7 @@ class World {
         }
     }
 
-    plugin(plugin, ...args) {
+    plugin<T extends any, A extends any[]>(plugin: Plugin<T, A>, ...args: A): T {
         if (typeof plugin !== "function") {
             throw new Error("A plugin must be a function that takes a world as an argument.");
         }
@@ -280,31 +246,34 @@ class World {
     }
 }
 
-class Registry {
-    values = [];
-    references = [];
-    name;
-    friendlyName;
+type ReferenceData<N extends string> = {type: N, index: number};
+type Reference<V, N extends string, R extends object | Function> = {data: ReferenceData<N>} & R;
 
-    constructor (name, friendlyName) {
+class Registry<T, N extends string, R extends object | Function> {
+    values: T[] = [];
+    references: Reference<T, N, R>[] = [];
+    name: N;
+    friendlyName: string;
+
+    constructor (name: N, friendlyName: string | void) {
         this.name = name;
         this.friendlyName = friendlyName || name;
     }
 
-    push(value, refSource = _ => ({})) {
+    push<V extends T>(value: V, refSource: (ref: ReferenceData<N>) => R): Reference<V, N, R> {
         const index = this.values.push(value) - 1;
         const referenceData = {
             type: this.name,
             index: index,
         };
-        const reference = refSource(referenceData);
+        const reference = refSource(referenceData) as Reference<V, N, R>;
         reference.data = referenceData;
         Object.freeze(reference.data);
         this.references.push(reference);
         return reference;
     }
 
-    checkRefAndThrow(reference) {
+    checkRefAndThrow(reference: Reference<T, N, R>) {
         const hasData = reference.data !== undefined;
         if (!hasData) {
             throw new Error(`Invalid ${this.friendlyName}`);
@@ -320,7 +289,7 @@ class Registry {
         }
     }
 
-    checkRef(reference) {
+    checkRef(reference: Reference<T, N, R>): boolean {
         const hasData = reference.data !== undefined;
         if (!hasData) {
             return false;
@@ -337,77 +306,75 @@ class Registry {
         return true;
     }
 
-    get(reference) {
+    get<V extends T>(reference: Reference<V, N, R>): V {
         this.checkRefAndThrow(reference);
-        return this.values[reference.data.index];
+        return this.values[reference.data.index] as V;
     }
 }
 
-class Resources {
-    static Time = class {
-        isPerformanceSupported;
-        relativeTimestamp;
-        lastLastFrame;
-        lastFrame;
-        currentFrame;
+export class Time {
+    isPerformanceSupported: boolean;
+    relativeTimestamp: number;
+    lastLastFrame: number;
+    lastFrame: number;
+    currentFrame: number;
 
-        constructor () {
-            this.isPerformanceSupported = window.performance && window.performance.now;
-            if (!this.isPerformanceSupported) {
-                console.warn("Performance API not supported. Using the Date API instead which is less accurate and can tick backwards, e.g. when the user swiches timezones.");
-            }
-            this.relativeTimestamp = this.now();
-            this.lastLastFrame = this.relativeTimestamp;
-            this.lastFrame = this.relativeTimestamp;
-            this.currentFrame = this.relativeTimestamp;
+    constructor () {
+        this.isPerformanceSupported = !!(window.performance && window.performance.now);
+        if (!this.isPerformanceSupported) {
+            console.warn("Performance API not supported. Using the Date API instead which is less accurate and can tick backwards, e.g. when the user swiches timezones.");
         }
+        this.relativeTimestamp = this.now();
+        this.lastLastFrame = this.relativeTimestamp;
+        this.lastFrame = this.relativeTimestamp;
+        this.currentFrame = this.relativeTimestamp;
+    }
 
-        now() {
-            return this.isPerformanceSupported ? window.performance.now() : Date.now();
-        }
+    now(): number {
+        return this.isPerformanceSupported ? window.performance.now() : Date.now();
+    }
 
-        ms() {
-            return this.now() - this.relativeTimestamp;
-        }
+    ms(): number {
+        return this.now() - this.relativeTimestamp;
+    }
 
-        s() {
-            return this.ms() / 1000;
-        }
+    s(): number {
+        return this.ms() / 1000;
+    }
 
-        frame() {
-            this.lastLastFrame = this.lastFrame;
-            this.lastFrame = this.currentFrame;
-            this.currentFrame = this.ms();
-        }
+    frame() {
+        this.lastLastFrame = this.lastFrame;
+        this.lastFrame = this.currentFrame;
+        this.currentFrame = this.ms();
+    }
 
-        deltaMs() {
-            return (this.lastFrame - this.lastLastFrame);
-        }
+    deltaMs(): number {
+        return (this.lastFrame - this.lastLastFrame);
+    }
 
-        deltaS() {
-            return (this.lastFrame - this.lastLastFrame) / 1000;
-        }
+    deltaS(): number {
+        return (this.lastFrame - this.lastLastFrame) / 1000;
     }
 }
 
-class Plugins {
-    static time = world => {
-        const Time = world.resource(new Resources.Time());
+export class Plugins {
+    static time = (world: World) => {
+        const TimeRes = world.resource(new Time());
         const Loop = world.schedule();
         world.system(Loop, (_, res) => {
-            res(Time).frame();
+            res<Time>(TimeRes).frame();
             requestAnimationFrame(() => world.runSchedule(Loop));
         });
         world.system(world.Setup, (_, res) => {
-            res(Time).frame();
+            res<Time>(TimeRes).frame();
             world.runSchedule(Loop);
         });
         return {
-            Time: Time,
+            Time: TimeRes,
             Loop: Loop
         }        
     };
-    static default = world => {
+    static default = (world: World) => {
         const {Time, Loop} = world.plugin(Plugins.time);
         return {
             Time: Time,
@@ -416,9 +383,9 @@ class Plugins {
     };
 }
 
-function recursiveEvery(array, fn) {
+function recursiveEvery<T>(array: DeepArray<T>, fn: (array: DeepArray<T>) => boolean): boolean {
     return array.every(v => {
-        if (v.constructor === Array) {
+        if (v instanceof Array) {
             return recursiveEvery(v, fn);
         } else {
             return true;
@@ -426,6 +393,6 @@ function recursiveEvery(array, fn) {
     }) && fn(array);
 }
 
-function containsAll(haystack, needles) {
+function containsAll<T>(haystack: T[], needles: T[]) {
     return needles.every(needle => haystack.includes(needle));
 }

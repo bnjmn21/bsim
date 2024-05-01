@@ -1,13 +1,37 @@
 :root {
-    --bg0: #111;
-    --fc: #ddd;
+    --bg:       #222;
+    --bg-light: #333;
+    --bg-dark:  #111;
+    --fg:       #ddd;
+    --fg-dark:  #777;
+
+    --border:       #444;
+    --border-light: #555;
+    --border-dark:  #333;
+
+    --accent: #8c00ff;
+    --accent-light: color-mix(in srgb, var(--accent) 50%, var(--fg));
+
+    --glass:              color-mix(in srgb, color-mix(in srgb, var(--bg) 90%, var(--fg)) 50%, transparent);
+    --glass-border:       color-mix(in srgb, color-mix(in srgb, var(--bg) 70%, var(--fg)) 50%, transparent);
+    --glass-light:        color-mix(in srgb, color-mix(in srgb, var(--bg) 70%, var(--fg)) 50%, transparent);
+    --glass-light-border: color-mix(in srgb, color-mix(in srgb, var(--bg) 50%, var(--fg)) 50%, transparent);
+    --glass-backdrop-filter: blur(40px);
+
+    --transition: 250ms cubic-bezier(0.215, 0.610, 0.355, 1);
 }
 
 body {
     margin: 0;
-    background-color: var(--bg0);
+    background-color: var(--bg);
     height: 100dvh;
-    color: var(--fc);
+    color: var(--fg);
+
+    font-family: "JetBrains Mono", monospace;
+    font-optical-sizing: auto;
+    font-weight: 400;
+    font-style: normal;
+    overflow: hidden;
 }
 
 #main-canvas {
@@ -22,6 +46,90 @@ body {
     pointer-events: none;
 }
 
+#title-bar {
+    position: absolute;
+    display: flex;
+    flex-direction: row;
+    align-items: last baseline;
+    width: 100vw;
+    height: 2.5rem;
+    padding-inline: 1rem;
+    padding-bottom: .25rem;
+    background-color: var(--glass);
+    border-bottom: 1px solid var(--glass-border);
+    backdrop-filter: var(--glass-backdrop-filter);
+}
+
+#title-bar h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    line-height: 1.25em;
+    font-weight: 600;
+}
+
+#title-bar .slash {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.25em;
+    color: var(--fg-dark);
+    font-weight: 400;
+    margin-inline: .5rem;
+}
+
+#title-bar .sub-section {
+    margin: 0;
+    font-size: 1.25rem;
+    line-height: 1.25em;
+    font-weight: 400;
+}
+
+#title-bar .rename-input,
+#title-bar-text-edit {
+    margin: 0;
+    padding: 0;
+    font-size: 1.25rem;
+    line-height: 1em;
+    font-weight: 400;
+    background: none;
+    border: none;
+    font-family: inherit;
+    color: inherit;
+    white-space-collapse: preserve;
+    max-width: 50rem;
+}
+
+#title-bar .rename-input:focus-visible {
+    outline: none;
+    border-bottom: 1px solid var(--fg);
+    margin-bottom: -1px;
+}
+
+#title-bar .edit-btn {
+    background: none;
+    border: none;
+    box-sizing: content-box;
+    height: 1rem;
+    border-radius: .2rem;
+    transition: all var(--transition);
+    margin-inline: .1rem;
+    cursor: pointer;
+    padding: .25rem .25rem .4rem .4rem;
+}
+
+#title-bar .edit-btn:hover {
+    background-color: var(--glass-light);
+}
+
+#title-bar .icon {
+    fill: var(--fg);
+    height: 1rem;
+    transition: all var(--transition);
+}
+
+#title-bar .icon.focus {
+    fill: var(--accent-light);
+}
+
 .dom2d-element {
     position: absolute;
     display: block;
@@ -29,12 +137,9 @@ body {
     height: 0;
 }
 
-.test {
-    transform: translate(-50%, -100%);
-    border-radius: 5px;
-    border: 1px solid #555;
-    background-color: #222;
-    padding: 1em;
-    display: block;
-    width: fit-content;
+#hidden {
+    position: absolute;
+    width: 100vw;
+    pointer-events: none;
+    opacity: 0;
 }

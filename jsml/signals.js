@@ -5,23 +5,28 @@ export function isSignal(signal) {
     return false;
 }
 class Value {
+    listening = false;
+    calledWhileListening = false;
+    value;
+    childSignals = [];
+    signalsInstance;
+    changed = false;
+    effects = [];
     constructor(signalsInstance, value) {
-        this.listening = false;
-        this.calledWhileListening = false;
-        this.childSignals = [];
-        this.changed = false;
-        this.effects = [];
         this.value = value;
         this.signalsInstance = signalsInstance;
     }
     set(value) {
+        const oldValue = this.value;
         this.value = value;
-        for (const child of this.childSignals) {
-            child.setDirty();
-        }
-        this.changed = true;
-        for (const effect of this.effects) {
-            effect();
+        if (oldValue !== value) {
+            for (const child of this.childSignals) {
+                child.setDirty();
+            }
+            this.changed = true;
+            for (const effect of this.effects) {
+                effect();
+            }
         }
     }
     get() {
@@ -50,13 +55,16 @@ class Value {
     }
 }
 class Computed {
+    listening = false;
+    calledWhileListening = false;
+    computeFn;
+    value;
+    childSignals = [];
+    dirty = false;
+    changed = false;
+    signalsInstance;
+    effects = [];
     constructor(signalsInstance, computeFn) {
-        this.listening = false;
-        this.calledWhileListening = false;
-        this.childSignals = [];
-        this.dirty = false;
-        this.changed = false;
-        this.effects = [];
         this.computeFn = computeFn;
         this.signalsInstance = signalsInstance;
         this.value = signalsInstance.computeAndAddToTree(this);
@@ -103,8 +111,10 @@ class Computed {
     }
 }
 export class Signals {
+    static Value = Value;
+    static Computed = Computed;
+    signals = [];
     constructor() {
-        this.signals = [];
     }
     value(value) {
         const signal = new Signals.Value(this, value);
@@ -164,8 +174,6 @@ export class Signals {
         return calledSignals;
     }
 }
-Signals.Value = Value;
-Signals.Computed = Computed;
 export function directEffect(signal, fn) {
     signal.addEffect(fn);
 }

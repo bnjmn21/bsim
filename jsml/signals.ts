@@ -29,13 +29,16 @@ class Value<T> implements Signal<T> {
     }
 
     set(value: T) {
+        const oldValue = this.value;
         this.value = value;
-        for (const child of this.childSignals) {
-            child.setDirty();
-        }
-        this.changed = true;
-        for (const effect of this.effects) {
-            effect();
+        if (oldValue !== value) {
+            for (const child of this.childSignals) {
+                child.setDirty();
+            }
+            this.changed = true;
+            for (const effect of this.effects) {
+                effect();
+            }
         }
     }
 
