@@ -23,7 +23,7 @@ export class Gradient {
     }
     static GRADIENTS = {
         RADIAL: (centerFn: (size: Vec2) => Vec2) => (pixel: Vec2, size: Vec2): number => {
-            return pixel.dist(center(size)) / size.hypot();
+            return pixel.dist(centerFn(size)) / size.hypot();
         }
     }
 
