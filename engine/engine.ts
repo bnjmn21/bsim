@@ -47,7 +47,23 @@ export class Vec2 {
     clone() {
         return new Vec2(this.x, this.y);
     }
+
+    hypot() {
+        return Math.hypot(this.x, this.y)
+    }
+
+    dist(to: Vec2) {
+        return this.sub(to).hypot()
+    }
+
+    area() {
+        return this.x * this.y
+    }
 };
+
+export function lerp(a: number, b: number, t: number): number {
+    return ((1-t)*a) + (t*b);
+}
 
 // --- CANVAS ---
 export class Canvas {
