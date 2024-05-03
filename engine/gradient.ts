@@ -62,12 +62,12 @@ export class Gradient {
         });
     }
 
-    getColor(t: number) {
-        for (let i = 0; i < this.colorStops; i++) {
+    getColor(t: number): RGB {
+        for (let i = 0; i < this.colorStops.length; i++) {
             if (t < this.colorStops[i].position) {
                 if (i === 0) {
                     return this.colorStops[i].interpolation(
-                        this._startColor,
+                        this._startColor as Color,
                         this.colorStops[i].color,
                         t / this.colorStops[i].position
                     );
@@ -81,10 +81,11 @@ export class Gradient {
                 }
             }
         }
+        return new RGB(0, 0, 0);
     }
 
     renderTo(imageData: ImageData) {
-        const grayscale = [];
+        const grayscale: number[][] = [];
         const size = new Vec2(imageData.width, imageData.height);
         if (!this._startColor) {
             throw new Error("Start color must be set");
@@ -96,10 +97,11 @@ export class Gradient {
             for (let x = 0; x < size.x; x++) {
                 row[y] = this.gradientFn(new Vec2(x, y), size);
             }
+            grayscale.push(row);
         }
         this.ditheringFn(grayscale);
         for (let i = 0; i < size.area(); i++) {
-            const color = this.getColor(grayscale)
+            const color = this.getColor(grayscale[i / size.y][i % size.y])
             imageData.data[i * 4] = color.r;
             imageData.data[i * 4 + 1] = color.g;
             imageData.data[i * 4 + 2] = color.b;
