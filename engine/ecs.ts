@@ -1,72 +1,5 @@
-/**
- * Entity-Component-System Modell, inspiriert von [bevy_ecs](https://docs.rs/bevy_ecs/)
- * Ein ECS besteht aus einer Welt und Systemen.
- * Eine Welt speichert Daten, und Systeme transformieren die Welt.
- * Man kann sich das vorstellen wie die Position aller Atome als Welt, und die physikalischen Gesetze als Systeme.
- * Eine Welt besteht aus Entitäten, Komponenten und Resourcen.
- * Resourcen sind global verfügbare Daten, z.B. Texturen, das HTML-Dokument oder die Uhr.
- * Entitäten sind die eigentlichen "Sachen" einer Welt, sie bestehen aus 0 oder mehr Komponenten.
- * Komponenten speichern Daten zu Entitäten.
- * Systeme sind einfache Funktionen. Sie werden zu einer schedule zugeordnet.
- * Sobald man dann `world.run()` ausführt werden alle Systeme aus der `Setup`-schedule ausgeführt.
- * `Setup` ist standardweise die einzige schedule die es gibt.
- * 
- * Eine Atom-Entität besteht vielleicht aus Position- und Geschwindigkeits-Komponenten:
- * ```js
- * const world = new World();
- * 
- * const {Draw, Time} = world.plugin(Plugins.default);
- * // Fügt einige praktische Resourcen zur Welt hinzu.
- * // Plugins sind Funktionen die die Welt modifizieren.
- * // Sie können z.B. neue Resourcen, Komponenten, Systeme, usw. hinzufügen.
- * // Theoretisch kann man die ganze App als Plugin programmieren und dann zur Welt hinzufügen.
- * // "Draw" ist eine Schedule, deren Systeme ganze Zeit wiederholt ausgeführt wird.
- * // "Time" ist eine Resource, mit der sich genaue Zeitabstände messen lassen.
- * // Die Zeile lässt sich auch schreiben als:
- * // const {Draw} = world.plugin(Plugins.default);
- * // const {Time} = world.plugin(Plugins.default);
- * // Alle Plugins werden nur maximal einmal ausgeführt. world.plugin() merkt sich den return-Wert
- * // von allen bereits ausgeführten Plugins und wenn man dann noch mal world.plugin() ausführt,
- * // wird einfach der bereits gespeicherte Wert ausgegeben.
- * 
- * const Position = world.component("x", "y");
- * // Erstellt eine Position-Komponente, die aus x und y besteht.
- * 
- * const Velocity = world.component(Vec2);
- * // Man kann auch Komponenten aus Klassen erstellen.
- * // alternativ kann man auch beide world.component-Befehle in einen komprimieren:
- * // const {Position, Velocity} = world.component({Position: ["x", "y"], Velocity: Vec2});
- * 
- * world.spawn(Position({x: 0, y: 0}), Velocity(new Vec2(0, 1));
- * // Erzeugt eine Entität die aus einer Position und Geschwindigkeit besteht.
- * // Bei Komponenten aus Klassen kann man auch Velocity.new(0, 1) statt Velocity(new Vec2(0, 1)) verwenden.
- * 
- * world.add_system(Draw, Position, Velocity, (entities, resources) => {
- *     entities.forEach(entity => {
- *         entity(Position).x += resources(Time).deltaSeconds() * entity(Velocity).x;
- *         entity(Position).y += resources(Time).deltaSeconds() * entity(Velocity).y;
- *     });
- * });
- * // Hier wird ein System zu "Draw" hinzugefügt, dass heißt es wird die ganze Zeit ausgeführt.
- * // Das System betrifft nur Entitäten die eine Position- sowie eine Velocity-Komponente haben.
- * // Mit entity(Komponente) kann man auf eine Komponente von einer Entität zugreifen.
- * // Mit resources(Resource) kann man auf eine Resource zugreifen.
- * // resources(Time).deltaSeconds() misst die Zeit die nach einem "Draw" vergangen ist.
- * // So ist die tatsächliche Geschwindigkeit der Atome immer gleich,
- * // egal wie viele Draw-Durchläufe der Computer vom Nutzer pro Sekunde ausführen kann.
- * 
- * world.run();
- * // Jetzt gehts los!
- * // run() blockiert nur so lange wie die Setup-schedule braucht.
- * // Die Draw-schedule aus Plugins.default() wird über `requestAnimationFrame()` ausgeführt und blockiert daher nicht.
- * ```
- */
-
 export type Constructor<T> = new (...args: any[]) => T;
 export type Instance<T extends Constructor<any>> = T extends Constructor<infer I> ? I : never;
-
-export type ResourceRef<T> = Reference<T, "resource", {}>;
-export type ResourceWrapper = (<R>(resource: ResourceRef<R>) => R);
 
 export type Entity<T> = T[];
 export type EntityWrapper<T extends Constructor<any>> = (<E extends Instance<T>>(component: Constructor<E>) => E) & {
@@ -74,19 +7,59 @@ export type EntityWrapper<T extends Constructor<any>> = (<E extends Instance<T>>
     componentTypes: () => T[];
     componentValues: () => T[];
     components: () => [T, Instance<T>][];
+    delete: () => void;
 };
+function createEntityWrapper<T extends Constructor<any>>(entity: Entity<Instance<T>>, entityArray: Entity<any>[]): EntityWrapper<T> {
+    const conformingEntity = entity as Entity<Instance<T>>;
+    const entityReference = <E extends Instance<T>>(component: Constructor<E>) => {
+        return conformingEntity.find(v => v.constructor === component) as Instance<T>;
+    }
+    entityReference.has = (component: T) => {
+        return conformingEntity.find(v => v.constructor === component) !== undefined;
+    }
+    entityReference.componentTypes = () => {
+        return conformingEntity.map(v => v.constructor as T);
+    }
+    entityReference.componentValues = () => {
+        return conformingEntity;
+    }
+    entityReference.components = () => {
+        return conformingEntity.map<[T, Instance<T>]>(v => [v.constructor, v]);
+    }
+    entityReference.delete = () => {
+        delete entityArray[entityArray.findIndex(v => v === conformingEntity)];
+    }
+    return entityReference;
+}
 
 export type Schedule = Reference<null, "schedule", {}>;
 
-export type System<T extends Constructor<any>> = (e: EntityWrapper<T>[], r: ResourceWrapper) => void;
+export type System<T extends Constructor<any>> = (e: EntityWrapper<T>[]) => void;
 
 export type InternalPlugin = {result: any, fn: Plugin<any, any>, args: any[]};
 export type Plugin<T, A extends any[]> = (world: World, ...args: A) => T;
 
 export type DeepArray<T> = (T | DeepArray<T>)[];
 
+function componentMapHasExact(map: Map<Constructor<any>[], any>, has: Constructor<any>[]) {
+    for (const [k, v] of map.entries()) {
+        if (k.every((v, i) => v === has[i]) && k.length === has.length) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function componentMapGetExact(map: Map<Constructor<any>[], any>, key: Constructor<any>[]) {
+    for (const [k, v] of map.entries()) {
+        if (k.every((v, i) => v === key[i]) && k.length === key.length) {
+            return v;
+        }
+    }
+    return undefined;
+}
+
 export class World {
-    resourceRegistry: Registry<any, "resource", {}> = new Registry("resource");
     entityRegistries: Map<Constructor<any>[], Entity<any>[]> = new Map();
     scheduleRegistry: Registry<null, "schedule", {}> = new Registry("schedule");
     systemRegistries: Map<Constructor<any>[], Function[]>[] = [];
@@ -97,44 +70,20 @@ export class World {
         this.Setup = this.schedule();
     }
 
-    resource<T>(value: T): ResourceRef<T> {
-        return this.resourceRegistry.push(value, () => ({}));
-    }
-
-    getResource<T>(resource: ResourceRef<T>): T {
-        return this.resourceRegistry.get(resource);
-    }
-
     getEntities<T extends Constructor<any>>(...components: DeepArray<T>): EntityWrapper<T>[] {
         const flatComponents = components.flat() as Constructor<any>[];
         const totalEntities: EntityWrapper<T>[] = [];
         for (let [registryComponents, entities] of this.entityRegistries) {
             if (containsAll(registryComponents, flatComponents)) {
                 for (let entity of entities) {
-                    const conformingEntity = entity as Entity<Instance<T>>;
-                    const entityReference = <E extends Instance<T>>(component: Constructor<E>) => {
-                        return conformingEntity.find(v => v.constructor === component) as Instance<T>;
-                    }
-                    entityReference.has = (component: T) => {
-                        return conformingEntity.find(v => v.constructor === component) !== undefined;
-                    }
-                    entityReference.componentTypes = () => {
-                        return conformingEntity.map(v => v.constructor as T);
-                    }
-                    entityReference.componentValues = () => {
-                        return conformingEntity;
-                    }
-                    entityReference.components = () => {
-                        return conformingEntity.map<[T, Instance<T>]>(v => [v.constructor, v]);
-                    }
-                    totalEntities.push(entityReference);
+                    totalEntities.push(createEntityWrapper(entity, entities));
                 }
             }
         }
         return totalEntities;
     }
 
-    spawn<T extends Instance<Constructor<any>>>(...components: DeepArray<T>) {
+    spawn<T extends Instance<Constructor<any>>>(...components: DeepArray<T>): EntityWrapper<Constructor<T>> {
         const flatComponents = components.flat() as Instance<Constructor<any>>[];
         const componentTypes = flatComponents.map(v => v.constructor as Constructor<any>);
         componentTypes.reduce((p, v) => {
@@ -144,11 +93,12 @@ export class World {
             p.push(v);
             return p;
         }, [] as Constructor<any>[]);
-        if (!this.entityRegistries.has(componentTypes)) {
+        if (!componentMapHasExact(this.entityRegistries, componentTypes)) {
             this.entityRegistries.set(componentTypes, [flatComponents]);
         } else {
-            (this.entityRegistries.get(componentTypes) as Entity<any>[]).push(flatComponents);
+            (componentMapGetExact(this.entityRegistries, componentTypes) as Entity<any>[]).push(flatComponents);
         }
+        return createEntityWrapper(flatComponents, this.entityRegistries.get(componentTypes) as Entity<any>[]);
     }
 
     schedule(): Reference<null, "schedule", {}> {
@@ -183,17 +133,17 @@ export class World {
             throw invArgs();
         }
         const flatArgs = args.flat() as (T | System<T>)[];
-        const components = [];
+        let components = [];
         for (let arg of flatArgs) {
             if (arg.toString().startsWith("class")) {
                 components.push(arg as T);
             } else if (typeof arg === "function") {
-                if (!this.systemRegistries[schedule.data.index].has(components)) {
+                if (!componentMapHasExact(this.systemRegistries[schedule.data.index], components)) {
                     this.systemRegistries[schedule.data.index].set(components, [arg]);
                 } else {
-                    (this.systemRegistries[schedule.data.index].get(components) as Function[]).push(arg);
+                    (componentMapGetExact(this.systemRegistries[schedule.data.index], components) as Function[]).push(arg);
                 }
-                components.splice(0, components.length);
+                components = [];
             } else {
                 throw invArgs();
             }
@@ -214,10 +164,7 @@ export class World {
                 entities = this.getEntities();
             }
             for (let system of systems) {
-                system(entities, (reference: ResourceRef<any>) => {
-                    this.resourceRegistry.checkRefAndThrow(reference);
-                    return this.resourceRegistry.values[reference.data.index];
-                });
+                system(entities);
             }
         }
     }
@@ -318,6 +265,7 @@ export class Time {
     lastLastFrame: number;
     lastFrame: number;
     currentFrame: number;
+    frameCount: number;
 
     constructor () {
         this.isPerformanceSupported = !!(window.performance && window.performance.now);
@@ -328,6 +276,7 @@ export class Time {
         this.lastLastFrame = this.relativeTimestamp;
         this.lastFrame = this.relativeTimestamp;
         this.currentFrame = this.relativeTimestamp;
+        this.frameCount = 0;
     }
 
     now(): number {
@@ -346,6 +295,7 @@ export class Time {
         this.lastLastFrame = this.lastFrame;
         this.lastFrame = this.currentFrame;
         this.currentFrame = this.ms();
+        this.frameCount++;
     }
 
     deltaMs(): number {
@@ -355,29 +305,33 @@ export class Time {
     deltaS(): number {
         return (this.lastFrame - this.lastLastFrame) / 1000;
     }
+
+    getFrameCount(): number {
+        return this.frameCount;
+    }
 }
 
 export class Plugins {
     static time = (world: World) => {
-        const TimeRes = world.resource(new Time());
+        const time = new Time();
         const Loop = world.schedule();
-        world.system(Loop, (_, res) => {
-            res<Time>(TimeRes).frame();
+        world.system(Loop, _ => {
+            time.frame();
             requestAnimationFrame(() => world.runSchedule(Loop));
         });
-        world.system(world.Setup, (_, res) => {
-            res<Time>(TimeRes).frame();
+        world.system(world.Setup, _ => {
+            time.frame();
             world.runSchedule(Loop);
         });
         return {
-            Time: TimeRes,
+            time: time,
             Loop: Loop
         }        
     };
     static default = (world: World) => {
-        const {Time, Loop} = world.plugin(Plugins.time);
+        const {time, Loop} = world.plugin(Plugins.time);
         return {
-            Time: Time,
+            time: time,
             Loop: Loop
         }
     };

@@ -1,3 +1,4 @@
+import { lerp } from "./engine.js";
 export class RGBF {
     r;
     g;
@@ -44,6 +45,12 @@ export class RGBF {
             s = diff / (1 - Math.abs((2 * l) - 1));
         }
         return new HSL(h, s, l);
+    }
+    toArray() {
+        return [this.r, this.g, this.b];
+    }
+    toCSS() {
+        return `rgb(${this.r * 255}, ${this.g * 255}, ${this.b * 255})`;
     }
 }
 export class RGB {
@@ -92,6 +99,12 @@ export class RGB {
             s = diff / (1 - Math.abs((2 * l) - 1));
         }
         return new HSL(h, s, l);
+    }
+    toArray() {
+        return [this.r, this.g, this.b];
+    }
+    toCSS() {
+        return `rgb(${this.r}, ${this.g}, ${this.b})`;
     }
 }
 export class HSL {
@@ -161,4 +174,13 @@ export class HSL {
     toHSL() {
         return new HSL(this.h, this.s, this.l);
     }
+    toArray() {
+        return [this.h, this.s, this.l];
+    }
+    toCSS() {
+        return `hsl(${this.h}, ${this.s * 100}%, ${this.l * 100}%)`;
+    }
+}
+export function color_mix(t, a, b) {
+    return new RGB(lerp(a.toRGB().r, b.toRGB().r, t), lerp(a.toRGB().g, b.toRGB().g, t), lerp(a.toRGB().b, b.toRGB().b, t));
 }

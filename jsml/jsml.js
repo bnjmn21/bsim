@@ -128,6 +128,10 @@ class Tag {
         return this;
     }
     classIf(className, condition) {
+        if (typeof condition === "function") {
+            this.classIfList.push([className, signals.computed(condition)]);
+            return this;
+        }
         this.classIfList.push([className, condition]);
         return this;
     }

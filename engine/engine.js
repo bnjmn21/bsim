@@ -37,8 +37,20 @@ export class Vec2 {
     clone() {
         return new Vec2(this.x, this.y);
     }
+    hypot() {
+        return Math.hypot(this.x, this.y);
+    }
+    dist(to) {
+        return this.sub(to).hypot();
+    }
+    area() {
+        return this.x * this.y;
+    }
 }
 ;
+export function lerp(a, b, t) {
+    return ((1 - t) * a) + (t * b);
+}
 // --- CANVAS ---
 export class Canvas {
     canvas;
@@ -74,7 +86,6 @@ export class Canvas {
         this.getContext2d().clearRect(0, 0, size.x, size.y);
     }
 }
-// --- RENDERING PRIMITIVES ---
 export class Camera2d {
     position;
     scale;
@@ -90,8 +101,11 @@ export class Camera2d {
         if (translateMouseButton) {
             htmlObject.addEventListener("mousemove", e => {
                 if (e.buttons & translateMouseButton) {
-                    this.position.subAssign(new Vec2(e.movementX, e.movementY));
+                    this.position.subAssign(new Vec2(e.movementX, e.movementY).mul(this.scale));
                 }
+            });
+            htmlObject.addEventListener("contextmenu", e => {
+                e.preventDefault();
             });
         }
         if (enableScrollZoom) {
@@ -99,22 +113,34 @@ export class Camera2d {
                 this.mousePos = new Vec2(e.clientX, e.clientY);
             });
             htmlObject.addEventListener("wheel", e => {
-                const scrollAmt = e.deltaY == 0 ? 0 : (e.deltaY > 0 ? -1 : 1);
+                const scrollAmt = e.deltaY == 0 ? 0 : (e.deltaY < 0 ? -1 : 1);
                 if (this.scale.x < 0.05 && scrollAmt == -1)
                     return;
                 this.rawScale += scrollAmt / 50;
                 const oldScale = this.scale.clone();
                 this.scale = new Vec2(Math.pow(this.rawScale, 2));
-                const scaleDiff = this.scale.sub(oldScale);
-                this.position.addAssign(this.mousePos.add(this.position).div(this.scale).mul(scaleDiff));
+                const scaleDiff = oldScale.sub(this.scale);
+                this.position.addAssign(this.mousePos.mul(scaleDiff));
             });
         }
     }
     screenToWorldCoords(screenCoords) {
         return screenCoords.mul(this.scale).add(this.position);
     }
+    worldToScreenCoords(worldCoords) {
+        return worldCoords.sub(this.position).div(this.scale);
+    }
     mouseWorldCoords() {
         return this.screenToWorldCoords(this.mousePos);
+    }
+    screenBounds(canvas) {
+        const top_left = this.screenToWorldCoords(new Vec2(0));
+        const bottom_right = this.screenToWorldCoords(canvas.size());
+        return {
+            size: bottom_right.sub(top_left),
+            top_left,
+            bottom_right
+        };
     }
 }
 export class Transform {
@@ -186,27 +212,43 @@ export class Transform {
         return this.replace(reference, { type: "scale", value: vec });
     }
 }
+export class SharedTranslate {
+    transforms = [];
+    pos;
+    constructor(initialPos) {
+        this.pos = initialPos;
+    }
+    set(vec) {
+        this.pos = vec;
+        for (const [transform, ref] of this.transforms) {
+            transform.setTranslate(ref, vec);
+        }
+    }
+    add(transform) {
+        transform.translate(this.pos);
+    }
+}
 export class CameraTransform {
     posRef;
     scaRef;
-    camera2dResource;
+    camera2d;
     constructor(camera2dResource) {
-        this.camera2dResource = camera2dResource;
+        this.camera2d = camera2dResource;
     }
 }
 export function render2dPlugin(world) {
     const { Loop } = world.plugin(Plugins.default);
-    world.system(Loop, Transform, CameraTransform, (entities, res) => {
-        for (const entity of entities) { // TODO HERE
+    world.system(Loop, Transform, CameraTransform, entities => {
+        for (const entity of entities) {
             const transform = entity(Transform);
             const cameraTransform = entity(CameraTransform);
-            const camera2d = res(cameraTransform.camera2dResource);
+            const camera2d = cameraTransform.camera2d;
             if (!cameraTransform.posRef || !cameraTransform.scaRef) {
-                cameraTransform.scaRef = transform.scaleStart(new Vec2(1, 1));
                 cameraTransform.posRef = transform.translateStart(new Vec2(0, 0));
+                cameraTransform.scaRef = transform.scaleStart(new Vec2(1, 1));
             }
             transform.setTranslate(cameraTransform.posRef, camera2d.position.invert());
-            transform.setScale(cameraTransform.scaRef, camera2d.scale);
+            transform.setScale(cameraTransform.scaRef, (new Vec2(1)).div(camera2d.scale));
         }
     });
 }

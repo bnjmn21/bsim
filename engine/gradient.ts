@@ -4,7 +4,7 @@ import { Vec2, lerp } from "./engine.js";
 
 export type ColorStop = { color: Color, position: number, interpolation: (a: Color, b: Color, t: number) => RGB }
 export type GradientFn = (pixel: Vec2, size: Vec2) => number;
-export type DitheringFn = (pixels: number[][]) => void;
+export type DitheringFn = (pixels: RGB[][]) => void;
 
 export class Gradient {
     static INTERPOLATIONS = {
@@ -14,7 +14,7 @@ export class Gradient {
             return new RGB(
                 lerp(aRgb.r, bRgb.r, t),
                 lerp(aRgb.g, bRgb.g, t),
-                lerp(aRgb.b, aRgb.b, t)
+                lerp(aRgb.b, bRgb.b, t)
             );
         },
         STEP: (a: Color, b: Color, t: number): RGB => {
@@ -26,13 +26,55 @@ export class Gradient {
             return pixel.dist(centerFn(size)) / size.hypot();
         }
     }
+    static DITHERING = {
+        NONE: (image: RGB[][]) => {},
+        FLOYD_STEINBERG: (image: RGB[][]) => {
+            for (let y = 0; y < image.length; y++) {
+                for (let x = 0; x < image[0].length; x++) {
+                    const oldPx = image[y][x].toArray();
+                    const newPx = oldPx.map(v => Math.floor(v));
+                    const error = oldPx.map((v, i) => v - newPx[i]);
+                    const lastX = x == image[0].length - 1;
+                    const lastY = y == image.length - 1;
+                    if (!lastX) {
+                        image[y    ][x + 1] = new RGB(
+                            image[y    ][x + 1].r + (error[0] * (7 / 16)),
+                            image[y    ][x + 1].g + (error[1] * (7 / 16)),
+                            image[y    ][x + 1].b + (error[2] * (7 / 16))
+                        );
+                    }
+                    if (!(lastY || x === 0)) {
+                        image[y + 1][x - 1] = new RGB(
+                            image[y + 1][x - 1].r + (error[0] * (3 / 16)),
+                            image[y + 1][x - 1].g + (error[1] * (3 / 16)),
+                            image[y + 1][x - 1].b + (error[2] * (3 / 16))
+                        );
+                    }
+                    if (!lastY) {
+                        image[y + 1][x    ] = new RGB(
+                            image[y + 1][x    ].r + (error[0] * (5 / 16)),
+                            image[y + 1][x    ].g + (error[1] * (5 / 16)),
+                            image[y + 1][x    ].b + (error[2] * (5 / 16))
+                        );
+                    }
+                    if (!(lastX || lastY)) {
+                        image[y + 1][x + 1] = new RGB(
+                            image[y + 1][x + 1].r + (error[0] * (1 / 16)),
+                            image[y + 1][x + 1].g + (error[1] * (1 / 16)),
+                            image[y + 1][x + 1].b + (error[2] * (1 / 16))
+                        );
+                    }
+                }
+            }
+        }
+    }
 
     gradientFn: GradientFn;
     ditheringFn: DitheringFn;
     _startColor?: Color;
     colorStops: ColorStop[] = [];
 
-    constructor(gradientFn: GradientFn, ditheringFn: DitheringFn) {
+    constructor(gradientFn: GradientFn, ditheringFn: DitheringFn = Gradient.DITHERING.FLOYD_STEINBERG) {
         this.gradientFn = gradientFn;
         this.ditheringFn = ditheringFn;
     }
@@ -85,26 +127,26 @@ export class Gradient {
     }
 
     renderTo(imageData: ImageData) {
-        const grayscale: number[][] = [];
+        const data: RGB[][] = [];
         const size = new Vec2(imageData.width, imageData.height);
         if (!this._startColor) {
             throw new Error("Start color must be set");
-        } else if (this.colorStops.length !== 0 || this.colorStops[this.colorStops.length - 1].position !== 1) {
+        } else if (this.colorStops.length === 0 || this.colorStops[this.colorStops.length - 1].position !== 1) {
             throw new Error("End color stop must be set");
         }
         for (let y = 0; y < size.y; y++) {
-            const row = [];
+            const row: RGB[] = [];
             for (let x = 0; x < size.x; x++) {
-                row[y] = this.gradientFn(new Vec2(x, y), size);
+                row[x] = this.getColor(this.gradientFn(new Vec2(x, y), size));
             }
-            grayscale.push(row);
-        }
-        this.ditheringFn(grayscale);
+            data.push(row);
+        }   
+        this.ditheringFn(data);
         for (let i = 0; i < size.area(); i++) {
-            const color = this.getColor(grayscale[i / size.y][i % size.y])
-            imageData.data[i * 4] = color.r;
-            imageData.data[i * 4 + 1] = color.g;
-            imageData.data[i * 4 + 2] = color.b;
+            const color = data[Math.floor(i / size.x)][i % size.x];
+            imageData.data[i * 4] = Math.floor(color.r);
+            imageData.data[i * 4 + 1] = Math.floor(color.g);
+            imageData.data[i * 4 + 2] = Math.floor(color.b);
             imageData.data[i * 4 + 3] = 255;
         }
     }

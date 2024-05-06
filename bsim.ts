@@ -1,22 +1,25 @@
 import * as icons from "./icons.js";
 import { JSML } from "./jsml/jsml.js";
-import { directEffect, signals } from "./jsml/signals.js";
+import { Signal, directEffect, signals } from "./jsml/signals.js";
 import { Gradient } from "./engine/gradient.js";
 import { RGB } from "./engine/colors.js";
-import { Plugins } from "./engine/ecs.js";
-import { Camera2d, Canvas, CanvasObject, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
+import { Plugins, World } from "./engine/ecs.js";
+import { Camera2d, CameraTransform, Canvas, CanvasObject, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
 import { I18N, LANG } from "./lang.js";
-import { And, Toggle, Block, circuitPlugin, OutputNode, InputNode } from "./blocks.js";
+import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode } from "./blocks.js";
+
 export const GRID_SIZE = 80;
+
 let firstFrame = true;
 let resizedLastFrame = false;
 let framesSinceResize = 0;
-let debugDisplay = undefined;
+let debugDisplay: HTMLElement | undefined = undefined;
+
 export const settings = {
     graphics: {
-        blur: signals.value("low"),
+        blur: signals.value<"off"|"low"|"high">("low"),
         shaded_background: signals.value(false),
-        gate_symbols: signals.value("ansi"),
+        gate_symbols: signals.value<"ansi"|"iec">("ansi"),
     },
     advanced: {
         debug_display: signals.value(true),
@@ -26,12 +29,10 @@ effectAndInit(settings.graphics.blur, () => {
     if (settings.graphics.blur.get() === "off") {
         document.body.classList.remove("blur-low");
         document.body.classList.add("blur-off");
-    }
-    else if (settings.graphics.blur.get() === "low") {
+    } else if (settings.graphics.blur.get() === "low") {
         document.body.classList.remove("blur-off");
         document.body.classList.add("blur-low");
-    }
-    else if (settings.graphics.blur.get() === "high") {
+    } else if (settings.graphics.blur.get() === "high") {
         document.body.classList.remove("blur-off");
         document.body.classList.remove("blur-low");
     }
@@ -40,48 +41,58 @@ effectAndInit(settings.graphics.shaded_background, () => {
     if (settings.graphics.shaded_background.get()) {
         document.body.classList.remove("simple-background");
         resizedLastFrame = true;
-    }
-    else {
+    } else {
         document.body.classList.add("simple-background");
     }
 });
+
 const circuitName = signals.value(I18N[LANG.get()].UNNAMED_CIRCUIT);
+
 const showSettings = signals.value(false);
 effectAndInit(showSettings, () => {
     if (showSettings.get()) {
-        document.getElementById("settings-container").classList.add("show");
-    }
-    else {
-        document.getElementById("settings-container").classList.remove("show");
+        (document.getElementById("settings-container") as HTMLElement).classList.add("show");
+    } else {
+        (document.getElementById("settings-container") as HTMLElement).classList.remove("show");
     }
 });
-const lastFrameTimes = [];
-export function bsim(world) {
+
+const lastFrameTimes: number[] = [];
+
+export function bsim(world: World) {
     const { time, Loop } = world.plugin(Plugins.time);
     world.plugin(circuitPlugin);
     world.plugin(render2dPlugin);
+
     addEventListener("resize", _ => {
         resizedLastFrame = true;
     });
-    const canvas = new Canvas(document.getElementById("main-canvas"));
+
+    const canvas = new Canvas(document.getElementById("main-canvas") as HTMLCanvasElement);
     canvas.autoFitToParent();
     let canvasBackground = canvas.context2d.createImageData(canvas.size().x, canvas.size().y);
+
     const backgroundGradient = new Gradient(Gradient.GRADIENTS.RADIAL(size => size.div(new Vec2(2))));
     backgroundGradient.startColor(new RGB(0x20, 0x20, 0x20));
     backgroundGradient.colorStopLinear(new RGB(0x10, 0x10, 0x10), 1);
+
     const camera = new Camera2d(canvas.size().div(new Vec2(2)).invert(), new Vec2(1));
     camera.enableCanvasMouseControls(canvas.canvas, 2, true);
+    
     const toggle0 = new Block([], new Toggle(false), new Vec2(0, 0));
     toggle0.getOutput([]);
     toggle0.render(world, camera);
+
     const toggle1 = new Block([], new Toggle(false), new Vec2(0, GRID_SIZE * 2));
     toggle1.getOutput([]);
     toggle1.render(world, camera);
+
     const andGate = new Block([
-        { block: toggle0, outputId: 0 }, { block: toggle1, outputId: 0 }
+        {block: toggle0, outputId: 0}, {block: toggle1, outputId: 0}
     ], new And(), new Vec2(GRID_SIZE * 4, GRID_SIZE));
     andGate.getOutput(world.getEntities(Block).map(v => v(Block)));
     andGate.render(world, camera);
+
     world.system(Loop, _ => {
         if (resizedLastFrame) {
             framesSinceResize = 0;
@@ -92,29 +103,31 @@ export function bsim(world) {
                 backgroundGradient.renderTo(canvasBackground);
             }
         }
+
         firstFrame = false;
         resizedLastFrame = false;
         framesSinceResize++;
+
         if (settings.graphics.shaded_background.get()) {
             canvas.context2d.putImageData(canvasBackground, 0, 0);
-        }
-        else {
+        } else {
             canvas.context2d.clearRect(0, 0, canvas.size().x, canvas.size().y);
         }
         drawGrid(camera, canvas);
+
         if (settings.advanced.debug_display.get()) {
             if (lastFrameTimes.length > 60) {
                 lastFrameTimes.shift();
                 lastFrameTimes.push(time.s());
-            }
-            else {
+            } else {
                 lastFrameTimes.push(time.s());
             }
             const avgFPS = 1 / ((lastFrameTimes[lastFrameTimes.length - 1] - lastFrameTimes[0]) / lastFrameTimes.length);
-            debugDisplay.textContent =
+            (debugDisplay as HTMLElement).textContent =
                 `FPS: ${avgFPS.toFixed(2)}`;
         }
     });
+
     world.system(Loop, [Block, CanvasObject, Transform], entities => {
         for (const e of entities) {
             if (e.has(CanvasObject) && e.has(Transform)) {
@@ -136,17 +149,22 @@ export function bsim(world) {
             }
         }
     });
+
     renderTitleBar();
+
     createSettings();
 }
+
 function renderTitleBar() {
-    const titleBarTextEditSizeTest = document.getElementById("title-bar-text-edit");
+    const titleBarTextEditSizeTest = document.getElementById("title-bar-text-edit") as HTMLElement;
+
     let tempName = circuitName.get();
     const editingName = signals.value(false);
     const editFieldWidth = signals.computed(() => {
         titleBarTextEditSizeTest.innerText = tempName;
         return `${titleBarTextEditSizeTest.offsetWidth}px`;
     });
+
     let previousLang = LANG.get();
     effectAndInit(LANG, () => {
         if (circuitName.get() === I18N[previousLang].UNNAMED_CIRCUIT) {
@@ -155,10 +173,13 @@ function renderTitleBar() {
         }
         previousLang = LANG.get();
     });
+
     const circuitNameIsNull = signals.computed(() => circuitName.get() === null);
-    const titleBar = new JSML(document.getElementById("title-bar"));
-    let renameField = null;
-    let editBtn = null;
+
+    const titleBar = new JSML(document.getElementById("title-bar") as HTMLElement);
+    let renameField: HTMLElement | null = null;
+    let editBtn: HTMLElement | null = null;
+
     titleBar.ui(ui => {
         ui.h1(ui => {
             ui.text(I18N[LANG.get()].NAME);
@@ -168,33 +189,32 @@ function renderTitleBar() {
             ui.div(ui => {
                 if (!editingName.get()) {
                     ui.p(ui => ui.text(() => `${circuitName.get()}`)).class("sub-section");
-                }
-                else {
+                } else {
                     editFieldWidth.setDirty();
-                    ui.tag("input", () => { })
+                    ui.tag("input", () => {})
                         .attribute("type", "text")
                         .attribute("value", tempName)
                         .class("rename-input")
                         .style("width", editFieldWidth)
                         .then(e => {
-                        renameField = e;
-                        e.focus();
-                    })
+                            renameField = e;
+                            e.focus();
+                        })
                         .addEventListener("input", e => {
-                        tempName = e.target.value;
-                        editFieldWidth.setDirty();
-                    })
+                            tempName = (e.target as HTMLInputElement).value;
+                            editFieldWidth.setDirty();
+                        })
                         .addEventListener("blur", e => {
-                        if (e.target === renameField && e.relatedTarget !== editBtn) {
-                            editingName.set(false);
-                            circuitName.set(tempName);
-                        }
-                    })
+                            if (e.target === renameField && e.relatedTarget !== editBtn) {
+                                editingName.set(false);
+                                circuitName.set(tempName);
+                            }
+                        })
                         .addEventListener("keypress", e => {
-                        if (e.key === "Enter") {
-                            e.target.blur();
-                        }
-                    });
+                            if (e.key === "Enter") {
+                                (e.target as HTMLElement).blur();
+                            }
+                        });
                 }
             });
             ui.button(ui => {
@@ -204,34 +224,34 @@ function renderTitleBar() {
             })
                 .class("icon-btn")
                 .click(() => {
-                editingName.set(!editingName.get());
-                if (editingName.get()) {
-                    tempName = circuitName.get();
-                }
-                else {
-                    circuitName.set(tempName);
-                }
-            })
+                    editingName.set(!editingName.get());
+                    if (editingName.get()) {
+                        tempName = circuitName.get();
+                    } else {
+                        circuitName.set(tempName);
+                    }
+                })
                 .then(e => {
-                editBtn = e;
-            });
-            ui.div(_ => { }).class("side-seperator");
+                    editBtn = e;
+                });
+            ui.div(_ => {}).class("side-seperator");
             ui.button(ui => {
                 ui.html(icons.settings).class("icon");
             })
                 .class("icon-btn")
                 .click(_ => {
-                showSettings.set(true);
-            });
+                    showSettings.set(true);
+                });
         }
         if (settings.advanced.debug_display.get()) {
-            ui.p(ui => { }).class("fps-display").then(e => {
+            ui.p(ui => {}).class("fps-display").then(e => {
                 debugDisplay = e;
             });
         }
     });
 }
-function drawGrid(camera, canvas) {
+
+function drawGrid(camera: Camera2d, canvas: Canvas) {
     const GRID_STROKE_WIDTH = 2;
     const GRID_STROKE_STYLE = "#FFFFFF2F";
     const LARGE_GRID_STROKE_WIDTH = 4;
@@ -244,8 +264,7 @@ function drawGrid(camera, canvas) {
         if (x % (GRID_SIZE * LARGE_GRID_SIZE_MULT) === 0) {
             ctx.lineWidth = LARGE_GRID_STROKE_WIDTH / camera.scale.x;
             ctx.strokeStyle = LARGE_GRID_STROKE_STYLE;
-        }
-        else {
+        } else {
             ctx.lineWidth = GRID_STROKE_WIDTH / camera.scale.x;
             ctx.strokeStyle = GRID_STROKE_STYLE;
         }
@@ -258,8 +277,7 @@ function drawGrid(camera, canvas) {
         if (y % (GRID_SIZE * LARGE_GRID_SIZE_MULT) === 0) {
             ctx.lineWidth = LARGE_GRID_STROKE_WIDTH / camera.scale.y;
             ctx.strokeStyle = LARGE_GRID_STROKE_STYLE;
-        }
-        else {
+        } else {
             ctx.lineWidth = GRID_STROKE_WIDTH / camera.scale.y;
             ctx.strokeStyle = GRID_STROKE_STYLE;
         }
@@ -269,19 +287,20 @@ function drawGrid(camera, canvas) {
         ctx.stroke();
     }
 }
+
 function createSettings() {
-    const settingsUi = new JSML(document.getElementById("settings-window"));
+    const settingsUi = new JSML(document.getElementById("settings-window") as HTMLElement);
     settingsUi.ui(ui => {
         ui.div(ui => {
             ui.h2(ui => ui.text(I18N[LANG.get()].SETTINGS.TITLE));
-            ui.div(_ => { }).class("side-seperator");
+            ui.div(_ => {}).class("side-seperator");
             ui.button(ui => {
                 ui.html(icons.close).class("icon");
             })
                 .class("icon-btn")
                 .click(_ => {
-                showSettings.set(false);
-            });
+                    showSettings.set(false);
+                });
         }).class("settings-title-bar");
         ui.div(ui => {
             ui.h3(ui => {
@@ -365,7 +384,8 @@ function createSettings() {
         }).class("settings-main");
     });
 }
-function effectAndInit(signal, fn) {
+
+function effectAndInit(signal: Signal<any>, fn: () => void) {
     directEffect(signal, fn);
     fn();
 }

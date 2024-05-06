@@ -10,6 +10,7 @@
     --border-dark:  #333;
 
     --accent: #8c00ff;
+    --accent-dark: color-mix(in srgb, var(--accent) 50%, var(--bg));
     --accent-light: color-mix(in srgb, var(--accent) 50%, var(--fg));
 
     --glass:              color-mix(in srgb, color-mix(in srgb, var(--bg) 90%, var(--fg)) 50%, transparent);
@@ -19,11 +20,29 @@
     --glass-backdrop-filter: blur(40px);
 
     --transition: 250ms cubic-bezier(0.215, 0.610, 0.355, 1);
+
+    --window-backdrop-filter: blur(10px);
+    --window-backdrop-color: #0000003f;
+    --window-shadow: 0 10px 10px 0 #0000005f;
+}
+
+body.blur-off {
+    --window-backdrop-filter: none;
+    --glass-backdrop-filter: none;
+}
+
+body.blur-low {
+    --window-backdrop-filter: none;
+    --glass-backdrop-filter: blur(5px);
+}
+
+body.simple-background {
+    background: var(--bg);
 }
 
 body {
     margin: 0;
-    background-color: var(--bg);
+    background: radial-gradient(circle farthest-side at center, var(--bg), color-mix(in srgb, var(--bg) 50%, #000) 200%);
     height: 100dvh;
     color: var(--fg);
 
@@ -46,89 +65,38 @@ body {
     pointer-events: none;
 }
 
-#title-bar {
-    position: absolute;
-    display: flex;
-    flex-direction: row;
-    align-items: last baseline;
-    width: 100vw;
-    height: 2.5rem;
-    padding-inline: 1rem;
-    padding-bottom: .25rem;
-    background-color: var(--glass);
-    border-bottom: 1px solid var(--glass-border);
-    backdrop-filter: var(--glass-backdrop-filter);
+.side-seperator {
+    flex: 1;
 }
 
-#title-bar h1 {
-    margin: 0;
-    font-size: 1.5rem;
-    line-height: 1.25em;
-    font-weight: 600;
-}
-
-#title-bar .slash {
-    margin: 0;
-    font-size: 1rem;
-    line-height: 1.25em;
-    color: var(--fg-dark);
-    font-weight: 400;
-    margin-inline: .5rem;
-}
-
-#title-bar .sub-section {
-    margin: 0;
-    font-size: 1.25rem;
-    line-height: 1.25em;
-    font-weight: 400;
-}
-
-#title-bar .rename-input,
-#title-bar-text-edit {
-    margin: 0;
-    padding: 0;
-    font-size: 1.25rem;
-    line-height: 1em;
-    font-weight: 400;
-    background: none;
-    border: none;
-    font-family: inherit;
-    color: inherit;
-    white-space-collapse: preserve;
-    max-width: 50rem;
-}
-
-#title-bar .rename-input:focus-visible {
-    outline: none;
-    border-bottom: 1px solid var(--fg);
-    margin-bottom: -1px;
-}
-
-#title-bar .edit-btn {
+.icon-btn {
     background: none;
     border: none;
     box-sizing: content-box;
-    height: 1rem;
     border-radius: .2rem;
     transition: all var(--transition);
-    margin-inline: .1rem;
     cursor: pointer;
-    padding: .25rem .25rem .4rem .4rem;
+    padding: .2rem;
+    height: 1em;
+    margin-inline: .2rem;
+    flex: 0 0 1em;
 }
 
-#title-bar .edit-btn:hover {
+.icon-btn:hover {
     background-color: var(--glass-light);
 }
 
-#title-bar .icon {
+.icon {
     fill: var(--fg);
-    height: 1rem;
     transition: all var(--transition);
+    height: 1em;
+    width: 1em;
 }
 
-#title-bar .icon.focus {
+.icon.focus {
     fill: var(--accent-light);
 }
+
 
 .dom2d-element {
     position: absolute;

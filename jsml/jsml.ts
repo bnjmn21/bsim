@@ -170,7 +170,11 @@ class Tag implements UiElement {
         return this;
     }
 
-    classIf(className: string, condition: Signal<boolean>) {
+    classIf(className: string, condition: Signal<boolean> | (() => boolean)) {
+        if (typeof condition === "function") {
+            this.classIfList.push([className, signals.computed(condition)]);
+            return this;
+        }
         this.classIfList.push([className, condition]);
         return this;
     }

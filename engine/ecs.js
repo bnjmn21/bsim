@@ -1,68 +1,42 @@
-/**
- * Entity-Component-System Modell, inspiriert von [bevy_ecs](https://docs.rs/bevy_ecs/)
- * Ein ECS besteht aus einer Welt und Systemen.
- * Eine Welt speichert Daten, und Systeme transformieren die Welt.
- * Man kann sich das vorstellen wie die Position aller Atome als Welt, und die physikalischen Gesetze als Systeme.
- * Eine Welt besteht aus Entitäten, Komponenten und Resourcen.
- * Resourcen sind global verfügbare Daten, z.B. Texturen, das HTML-Dokument oder die Uhr.
- * Entitäten sind die eigentlichen "Sachen" einer Welt, sie bestehen aus 0 oder mehr Komponenten.
- * Komponenten speichern Daten zu Entitäten.
- * Systeme sind einfache Funktionen. Sie werden zu einer schedule zugeordnet.
- * Sobald man dann `world.run()` ausführt werden alle Systeme aus der `Setup`-schedule ausgeführt.
- * `Setup` ist standardweise die einzige schedule die es gibt.
- *
- * Eine Atom-Entität besteht vielleicht aus Position- und Geschwindigkeits-Komponenten:
- * ```js
- * const world = new World();
- *
- * const {Draw, Time} = world.plugin(Plugins.default);
- * // Fügt einige praktische Resourcen zur Welt hinzu.
- * // Plugins sind Funktionen die die Welt modifizieren.
- * // Sie können z.B. neue Resourcen, Komponenten, Systeme, usw. hinzufügen.
- * // Theoretisch kann man die ganze App als Plugin programmieren und dann zur Welt hinzufügen.
- * // "Draw" ist eine Schedule, deren Systeme ganze Zeit wiederholt ausgeführt wird.
- * // "Time" ist eine Resource, mit der sich genaue Zeitabstände messen lassen.
- * // Die Zeile lässt sich auch schreiben als:
- * // const {Draw} = world.plugin(Plugins.default);
- * // const {Time} = world.plugin(Plugins.default);
- * // Alle Plugins werden nur maximal einmal ausgeführt. world.plugin() merkt sich den return-Wert
- * // von allen bereits ausgeführten Plugins und wenn man dann noch mal world.plugin() ausführt,
- * // wird einfach der bereits gespeicherte Wert ausgegeben.
- *
- * const Position = world.component("x", "y");
- * // Erstellt eine Position-Komponente, die aus x und y besteht.
- *
- * const Velocity = world.component(Vec2);
- * // Man kann auch Komponenten aus Klassen erstellen.
- * // alternativ kann man auch beide world.component-Befehle in einen komprimieren:
- * // const {Position, Velocity} = world.component({Position: ["x", "y"], Velocity: Vec2});
- *
- * world.spawn(Position({x: 0, y: 0}), Velocity(new Vec2(0, 1));
- * // Erzeugt eine Entität die aus einer Position und Geschwindigkeit besteht.
- * // Bei Komponenten aus Klassen kann man auch Velocity.new(0, 1) statt Velocity(new Vec2(0, 1)) verwenden.
- *
- * world.add_system(Draw, Position, Velocity, (entities, resources) => {
- *     entities.forEach(entity => {
- *         entity(Position).x += resources(Time).deltaSeconds() * entity(Velocity).x;
- *         entity(Position).y += resources(Time).deltaSeconds() * entity(Velocity).y;
- *     });
- * });
- * // Hier wird ein System zu "Draw" hinzugefügt, dass heißt es wird die ganze Zeit ausgeführt.
- * // Das System betrifft nur Entitäten die eine Position- sowie eine Velocity-Komponente haben.
- * // Mit entity(Komponente) kann man auf eine Komponente von einer Entität zugreifen.
- * // Mit resources(Resource) kann man auf eine Resource zugreifen.
- * // resources(Time).deltaSeconds() misst die Zeit die nach einem "Draw" vergangen ist.
- * // So ist die tatsächliche Geschwindigkeit der Atome immer gleich,
- * // egal wie viele Draw-Durchläufe der Computer vom Nutzer pro Sekunde ausführen kann.
- *
- * world.run();
- * // Jetzt gehts los!
- * // run() blockiert nur so lange wie die Setup-schedule braucht.
- * // Die Draw-schedule aus Plugins.default() wird über `requestAnimationFrame()` ausgeführt und blockiert daher nicht.
- * ```
- */
+function createEntityWrapper(entity, entityArray) {
+    const conformingEntity = entity;
+    const entityReference = (component) => {
+        return conformingEntity.find(v => v.constructor === component);
+    };
+    entityReference.has = (component) => {
+        return conformingEntity.find(v => v.constructor === component) !== undefined;
+    };
+    entityReference.componentTypes = () => {
+        return conformingEntity.map(v => v.constructor);
+    };
+    entityReference.componentValues = () => {
+        return conformingEntity;
+    };
+    entityReference.components = () => {
+        return conformingEntity.map(v => [v.constructor, v]);
+    };
+    entityReference.delete = () => {
+        delete entityArray[entityArray.findIndex(v => v === conformingEntity)];
+    };
+    return entityReference;
+}
+function componentMapHasExact(map, has) {
+    for (const [k, v] of map.entries()) {
+        if (k.every((v, i) => v === has[i]) && k.length === has.length) {
+            return true;
+        }
+    }
+    return false;
+}
+function componentMapGetExact(map, key) {
+    for (const [k, v] of map.entries()) {
+        if (k.every((v, i) => v === key[i]) && k.length === key.length) {
+            return v;
+        }
+    }
+    return undefined;
+}
 export class World {
-    resourceRegistry = new Registry("resource");
     entityRegistries = new Map();
     scheduleRegistry = new Registry("schedule");
     systemRegistries = [];
@@ -71,35 +45,13 @@ export class World {
     constructor() {
         this.Setup = this.schedule();
     }
-    resource(value) {
-        return this.resourceRegistry.push(value, () => ({}));
-    }
-    getResource(resource) {
-        return this.resourceRegistry.get(resource);
-    }
     getEntities(...components) {
         const flatComponents = components.flat();
         const totalEntities = [];
         for (let [registryComponents, entities] of this.entityRegistries) {
             if (containsAll(registryComponents, flatComponents)) {
                 for (let entity of entities) {
-                    const conformingEntity = entity;
-                    const entityReference = (component) => {
-                        return conformingEntity.find(v => v.constructor === component);
-                    };
-                    entityReference.has = (component) => {
-                        return conformingEntity.find(v => v.constructor === component) !== undefined;
-                    };
-                    entityReference.componentTypes = () => {
-                        return conformingEntity.map(v => v.constructor);
-                    };
-                    entityReference.componentValues = () => {
-                        return conformingEntity;
-                    };
-                    entityReference.components = () => {
-                        return conformingEntity.map(v => [v.constructor, v]);
-                    };
-                    totalEntities.push(entityReference);
+                    totalEntities.push(createEntityWrapper(entity, entities));
                 }
             }
         }
@@ -115,12 +67,13 @@ export class World {
             p.push(v);
             return p;
         }, []);
-        if (!this.entityRegistries.has(componentTypes)) {
+        if (!componentMapHasExact(this.entityRegistries, componentTypes)) {
             this.entityRegistries.set(componentTypes, [flatComponents]);
         }
         else {
-            this.entityRegistries.get(componentTypes).push(flatComponents);
+            componentMapGetExact(this.entityRegistries, componentTypes).push(flatComponents);
         }
+        return createEntityWrapper(flatComponents, this.entityRegistries.get(componentTypes));
     }
     schedule() {
         const reference = this.scheduleRegistry.push(null, () => ({}));
@@ -149,19 +102,19 @@ export class World {
             throw invArgs();
         }
         const flatArgs = args.flat();
-        const components = [];
+        let components = [];
         for (let arg of flatArgs) {
             if (arg.toString().startsWith("class")) {
                 components.push(arg);
             }
             else if (typeof arg === "function") {
-                if (!this.systemRegistries[schedule.data.index].has(components)) {
+                if (!componentMapHasExact(this.systemRegistries[schedule.data.index], components)) {
                     this.systemRegistries[schedule.data.index].set(components, [arg]);
                 }
                 else {
-                    this.systemRegistries[schedule.data.index].get(components).push(arg);
+                    componentMapGetExact(this.systemRegistries[schedule.data.index], components).push(arg);
                 }
-                components.splice(0, components.length);
+                components = [];
             }
             else {
                 throw invArgs();
@@ -183,10 +136,7 @@ export class World {
                 entities = this.getEntities();
             }
             for (let system of systems) {
-                system(entities, (reference) => {
-                    this.resourceRegistry.checkRefAndThrow(reference);
-                    return this.resourceRegistry.values[reference.data.index];
-                });
+                system(entities);
             }
         }
     }
@@ -275,6 +225,7 @@ export class Time {
     lastLastFrame;
     lastFrame;
     currentFrame;
+    frameCount;
     constructor() {
         this.isPerformanceSupported = !!(window.performance && window.performance.now);
         if (!this.isPerformanceSupported) {
@@ -284,6 +235,7 @@ export class Time {
         this.lastLastFrame = this.relativeTimestamp;
         this.lastFrame = this.relativeTimestamp;
         this.currentFrame = this.relativeTimestamp;
+        this.frameCount = 0;
     }
     now() {
         return this.isPerformanceSupported ? window.performance.now() : Date.now();
@@ -298,6 +250,7 @@ export class Time {
         this.lastLastFrame = this.lastFrame;
         this.lastFrame = this.currentFrame;
         this.currentFrame = this.ms();
+        this.frameCount++;
     }
     deltaMs() {
         return (this.lastFrame - this.lastLastFrame);
@@ -305,28 +258,31 @@ export class Time {
     deltaS() {
         return (this.lastFrame - this.lastLastFrame) / 1000;
     }
+    getFrameCount() {
+        return this.frameCount;
+    }
 }
 export class Plugins {
     static time = (world) => {
-        const TimeRes = world.resource(new Time());
+        const time = new Time();
         const Loop = world.schedule();
-        world.system(Loop, (_, res) => {
-            res(TimeRes).frame();
+        world.system(Loop, _ => {
+            time.frame();
             requestAnimationFrame(() => world.runSchedule(Loop));
         });
-        world.system(world.Setup, (_, res) => {
-            res(TimeRes).frame();
+        world.system(world.Setup, _ => {
+            time.frame();
             world.runSchedule(Loop);
         });
         return {
-            Time: TimeRes,
+            time: time,
             Loop: Loop
         };
     };
     static default = (world) => {
-        const { Time, Loop } = world.plugin(Plugins.time);
+        const { time, Loop } = world.plugin(Plugins.time);
         return {
-            Time: Time,
+            time: time,
             Loop: Loop
         };
     };

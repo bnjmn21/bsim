@@ -1,3 +1,5 @@
+import { lerp } from "./engine.js";
+
 export interface Color {
 
     /**
@@ -14,6 +16,11 @@ export interface Color {
      * convert the color to HSL [0..360, 0..1, 0..1]
      */
     toHSL(): HSL;
+
+    /**
+     * convert the color to css notation
+     */
+    toCSS(): string;
 }
 
 export class RGBF implements Color {
@@ -63,6 +70,14 @@ export class RGBF implements Color {
             s = diff / (1 - Math.abs((2*l) - 1));
         }
         return new HSL(h as number, s, l);
+    }
+
+    toArray(): [number, number, number] {
+        return [this.r, this.g, this.b];
+    }
+
+    toCSS(): string {
+        return `rgb(${this.r * 255}, ${this.g * 255}, ${this.b * 255})`
     }
 }
 
@@ -114,6 +129,14 @@ export class RGB implements Color {
         }
         return new HSL(h as number, s, l);
     }
+
+    toArray(): [number, number, number] {
+        return [this.r, this.g, this.b];
+    }
+
+    toCSS(): string {
+        return `rgb(${this.r}, ${this.g}, ${this.b})`
+    }
 }
 
 export class HSL implements Color {
@@ -164,4 +187,20 @@ export class HSL implements Color {
     toHSL() {
         return new HSL(this.h, this.s, this.l);
     }
+
+    toArray(): [number, number, number] {
+        return [this.h, this.s, this.l];
+    }
+
+    toCSS(): string {
+        return `hsl(${this.h}, ${this.s * 100}%, ${this.l * 100}%)`
+    }
+}
+
+export function color_mix(t: number, a: Color, b: Color): RGB {
+    return new RGB(
+        lerp(a.toRGB().r, b.toRGB().r, t),
+        lerp(a.toRGB().g, b.toRGB().g, t),
+        lerp(a.toRGB().b, b.toRGB().b, t),
+    );
 }
