@@ -79,7 +79,7 @@ export function bsim(world: World) {
     const camera = new Camera2d(canvas.size().div(new Vec2(2)).invert(), new Vec2(1));
     camera.enableCanvasMouseControls(canvas.canvas, 2, true);
     
-    const toggle0 = new Block([], new Toggle(false), new Vec2(0, 0));
+    const toggle0 = new Block([], new Toggle(true), new Vec2(0, 0));
     toggle0.getOutput([]);
     toggle0.render(world, camera);
 
@@ -87,11 +87,52 @@ export function bsim(world: World) {
     toggle1.getOutput([]);
     toggle1.render(world, camera);
 
+    const toggle2 = new Block([], new Toggle(true), new Vec2(GRID_SIZE * 4, GRID_SIZE * -1));
+    toggle2.getOutput([]);
+    toggle2.render(world, camera);
+
+    const xorGate = new Block([
+        {block: toggle0, outputId: 0}, {block: toggle1, outputId: 0}
+    ], new Xor(), new Vec2(GRID_SIZE * 4, GRID_SIZE));
+    xorGate.getOutput(world.getEntities(Block).map(v => v(Block)));
+    xorGate.render(world, camera);
+
+    const xorGate1 = new Block([
+        {block: toggle2, outputId: 0}, {block: xorGate, outputId: 0}
+    ], new Xor(), new Vec2(GRID_SIZE * 8, 0));
+    xorGate1.getOutput(world.getEntities(Block).map(v => v(Block)));
+    xorGate1.render(world, camera);
+
     const andGate = new Block([
         {block: toggle0, outputId: 0}, {block: toggle1, outputId: 0}
-    ], new And(), new Vec2(GRID_SIZE * 4, GRID_SIZE));
+    ], new And(), new Vec2(GRID_SIZE * 4, GRID_SIZE * 5));
     andGate.getOutput(world.getEntities(Block).map(v => v(Block)));
     andGate.render(world, camera);
+
+    const andGate1 = new Block([
+        {block: toggle2, outputId: 0}, {block: xorGate, outputId: 0}
+    ], new And(), new Vec2(GRID_SIZE * 8, GRID_SIZE * 3));
+    andGate1.getOutput(world.getEntities(Block).map(v => v(Block)));
+    andGate1.render(world, camera);
+
+    const orGate = new Block([
+        {block: andGate1, outputId: 0}, {block: andGate, outputId: 0}
+    ], new Or(), new Vec2(GRID_SIZE * 11, GRID_SIZE * 4));
+    orGate.getOutput(world.getEntities(Block).map(v => v(Block)));
+    orGate.render(world, camera);
+
+    const led = new Block([
+        {block: xorGate1, outputId: 0}
+    ], new LED(false), new Vec2(GRID_SIZE * 14, 0));
+    led.getOutput(world.getEntities(Block).map(v => v(Block)));
+    led.render(world, camera);
+
+
+    const led1 = new Block([
+        {block: orGate, outputId: 0}
+    ], new LED(false), new Vec2(GRID_SIZE * 14, GRID_SIZE * 2));
+    led1.getOutput(world.getEntities(Block).map(v => v(Block)));
+    led1.render(world, camera);
 
     world.system(Loop, _ => {
         if (resizedLastFrame) {
@@ -146,6 +187,49 @@ export function bsim(world: World) {
         for (const e of entities) {
             if (e.has(CanvasObject) && e.has(Transform)) {
                 e(CanvasObject).render(canvas.context2d, e(Transform));
+            }
+        }
+    });
+    world.system(Loop, [InputNode], entities => {
+        for (const e of entities) {
+            const input = e(InputNode).ref.inputs[e(InputNode).inputId];
+            if (typeof input !== "boolean") {
+                const startPos = input.block.pos.pos.add(
+                    input.block.block.outputNodes[input.outputId]
+                );
+                const endPos = e(InputNode).ref.pos.pos.add(
+                    e(InputNode).ref.block.inputNodes[e(InputNode).inputId]
+                );
+                const ctx = canvas.context2d;
+                if (input.block.output === null) {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, 100, 100);
+                }
+                if ((input.block.output as Boolean[])[input.outputId]) {
+                    ctx.strokeStyle = "#007f00";
+                } else {
+                    ctx.strokeStyle = "#7f0000";
+                }
+                ctx.lineWidth = GRID_SIZE / 4 + 16;
+                ctx.lineCap = "round";
+                ctx.save();
+                camera.toTransform().applyTransforms(ctx);
+                ctx.beginPath();
+                ctx.moveTo(startPos.x, startPos.y);
+                ctx.lineTo(endPos.x, endPos.y);
+                ctx.stroke();
+                if ((input.block.output as Boolean[])[input.outputId]) {
+                    ctx.strokeStyle = "#00ff00";
+                } else {
+                    ctx.strokeStyle = "#ff0000";
+                }
+                ctx.lineWidth = GRID_SIZE / 4;
+                ctx.lineCap = "round";
+                ctx.beginPath();
+                ctx.moveTo(startPos.x, startPos.y);
+                ctx.lineTo(endPos.x, endPos.y);
+                ctx.stroke();
+                ctx.restore();
             }
         }
     });

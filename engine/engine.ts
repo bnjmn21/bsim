@@ -175,6 +175,10 @@ export class Camera2d {
             bottom_right
         }
     }
+
+    toTransform(): Transform {
+        return new Transform(this.position.invert(), 0, new Vec2(1).div(this.scale));
+    }
 }
 
 type ObjToUnion<T> = {
@@ -189,14 +193,14 @@ export class Transform {
     constructor (initialTranslation: Vec2, initialRotation: number, initialScale: Vec2) {
         this.transformations = [];
         this.references = [];
-        if (initialTranslation !== undefined) {
-            this.translate(initialTranslation);
+        if (initialScale !== undefined) {
+            this.scale(initialScale);
         }
         if (initialRotation !== undefined) {
             this.rotate(initialRotation);
         }
-        if (initialScale !== undefined) {
-            this.scale(initialScale);
+        if (initialTranslation !== undefined) {
+            this.translate(initialTranslation);
         }
     }
 
@@ -263,6 +267,14 @@ export class Transform {
 
     setScale(reference: TransformationRef, vec: Vec2) {
         return this.replace(reference, {type: "scale", value: vec});
+    }
+
+    applyTransforms(ctx: CanvasRenderingContext2D) {
+        this.transformations.forEach(v => {
+            if (v.type === "translate") ctx.translate(v.value.x, v.value.y);
+            if (v.type === "rotate") ctx.rotate(v.value);
+            if (v.type === "scale") ctx.scale(v.value.x, v.value.y);
+        });
     }
 }
 

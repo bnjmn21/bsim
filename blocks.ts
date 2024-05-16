@@ -192,7 +192,7 @@ export class Toggle implements IBlock {
 
 export class LED implements IBlock {
     state: boolean;
-    inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, 0)];
+    inputNodes: Vec2[] = [new Vec2(0, 0)];
     outputNodes: Vec2[] = [];
 
     constructor(state: boolean) {
@@ -200,7 +200,8 @@ export class LED implements IBlock {
     }
 
     calculate(input: boolean[]): boolean[] {
-        return [this.state];
+        this.state = input[0];
+        return [];
     }
 
     render(ctx: CanvasRenderingContext2D): void {
@@ -259,7 +260,8 @@ export class Block {
                 inputs.push(input.block.getOutput(blocks)[input.outputId]);
             }
         }
-        return this.block.calculate(inputs);
+        this.output = this.block.calculate(inputs);
+        return this.output;
     }
 
     render(world: World, camera: Camera2d) {
@@ -356,11 +358,6 @@ export class InputNode {
         ctx.beginPath();
         ctx.arc(0, 0, GRID_SIZE / 4, 0, Math.PI * 2);
         ctx.fill();
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(-GRID_SIZE / 16, -GRID_SIZE / 8);
-        ctx.lineTo(GRID_SIZE / 16, 0);
-        ctx.lineTo(-GRID_SIZE / 16, GRID_SIZE / 8);
         ctx.stroke();
     }
 }

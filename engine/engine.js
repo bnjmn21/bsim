@@ -142,6 +142,9 @@ export class Camera2d {
             bottom_right
         };
     }
+    toTransform() {
+        return new Transform(this.position.invert(), 0, new Vec2(1).div(this.scale));
+    }
 }
 export class Transform {
     transformations;
@@ -149,14 +152,14 @@ export class Transform {
     constructor(initialTranslation, initialRotation, initialScale) {
         this.transformations = [];
         this.references = [];
-        if (initialTranslation !== undefined) {
-            this.translate(initialTranslation);
+        if (initialScale !== undefined) {
+            this.scale(initialScale);
         }
         if (initialRotation !== undefined) {
             this.rotate(initialRotation);
         }
-        if (initialScale !== undefined) {
-            this.scale(initialScale);
+        if (initialTranslation !== undefined) {
+            this.translate(initialTranslation);
         }
     }
     pushStart(transformation) {
@@ -210,6 +213,16 @@ export class Transform {
     }
     setScale(reference, vec) {
         return this.replace(reference, { type: "scale", value: vec });
+    }
+    applyTransforms(ctx) {
+        this.transformations.forEach(v => {
+            if (v.type === "translate")
+                ctx.translate(v.value.x, v.value.y);
+            if (v.type === "rotate")
+                ctx.rotate(v.value);
+            if (v.type === "scale")
+                ctx.scale(v.value.x, v.value.y);
+        });
     }
 }
 export class SharedTranslate {
