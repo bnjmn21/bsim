@@ -369,9 +369,9 @@ function createSettings() {
                 ui.button(ui => ui.text(I18N["de_de"].LANGS.DE_DE))
                     .classIf("focus", () => LANG.get() === "de_de")
                     .click(_ => LANG.set("de_de"));
-                //ui.button(ui => ui.text(I18N["la_ro"].LANGS.LA_RO))
-                //    .classIf("focus", () => LANG.get() === "la_ro")
-                //    .click(_ => LANG.set("la_ro"));
+                ui.button(ui => ui.text(I18N["la_ro"].LANGS.LA_RO))
+                    .classIf("focus", () => LANG.get() === "la_ro")
+                    .click(_ => LANG.set("la_ro"));
             }).class("settings-buttons-select");
             ui.div(ui => {
                 ui.h3(ui => {
