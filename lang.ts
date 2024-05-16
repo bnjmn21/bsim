@@ -18,8 +18,8 @@ export const I18N = {
             BACKGROUND_FLAT: "Flat",
             BACKGROUND_SHADED: "Shaded",
             GATE_SYMBOLS: "Gate symbols",
-            GATE_SYMBOLS_ANSI: "ANSI (America)",
-            GATE_SYMBOLS_IEC: "IEC (Europe)",
+            GATE_SYMBOLS_ANSI: "ANSI (American)",
+            GATE_SYMBOLS_IEC: "IEC (EU)",
             ADVANCED: "Advanced",
             DEBUG_DISPLAY: "Debug info",
 
@@ -47,8 +47,8 @@ export const I18N = {
             BACKGROUND_FLAT: "Einfarbig",
             BACKGROUND_SHADED: "Schattiert",
             GATE_SYMBOLS: "Gatter-Symbole",
-            GATE_SYMBOLS_ANSI: "ANSI (Amerika)",
-            GATE_SYMBOLS_IEC: "IEC (Europa)",
+            GATE_SYMBOLS_ANSI: "ANSI (Amerikanisch)",
+            GATE_SYMBOLS_IEC: "IEC (EU)",
             ADVANCED: "Erweitert",
             DEBUG_DISPLAY: "Debug-Informationen",
 
@@ -76,16 +76,16 @@ export const I18N = {
             BACKGROUND_FLAT: "Planus",
             BACKGROUND_SHADED: "Colos",
             GATE_SYMBOLS: "[[Untranslated]]",
-            GATE_SYMBOLS_ANSI: "[[Untranslated]]",
-            GATE_SYMBOLS_IEC: "[[Untranslated]]",
+            GATE_SYMBOLS_ANSI: "ANSI (Terra ignota)",
+            GATE_SYMBOLS_IEC: "IEC (???)",
             ADVANCED: "plus",
-            DEBUG_DISPLAY: "[[Untranslated]]",
+            DEBUG_DISPLAY: "Informatio",
 
             HIGH: "Altus",
             LOW: "Brevis",
             OFF: "Nihil",
-            SHOW: "[[Untranslated]]",
-            HIDE: "[[Untranslated]]",
+            SHOW: "Demonstrare",
+            HIDE: "Occultare",
         }
     }
 }
