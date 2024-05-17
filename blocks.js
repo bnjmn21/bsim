@@ -18,6 +18,7 @@ const OUTLINE_COLOR = (color) => color_mix(0.5, color, new RGB(0, 0, 0));
 export class And {
     inputNodes = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
+    listeners = [];
     calculate(input) {
         return [input.every(v => v)];
     }
@@ -58,6 +59,7 @@ export class And {
 export class Or {
     inputNodes = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
+    listeners = [];
     calculate(input) {
         return [input.some(v => v)];
     }
@@ -100,6 +102,7 @@ export class Or {
 export class Xor {
     inputNodes = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
+    listeners = [];
     calculate(input) {
         return [input.filter(v => v).length % 2 === 1];
     }
@@ -148,6 +151,15 @@ export class Toggle {
     state;
     inputNodes = [];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
+    listeners = [
+        {
+            hitbox: { type: "rect", pos: new Vec2(0, -GRID_SIZE / 2), size: new Vec2(GRID_SIZE) },
+            fn: e => {
+                this.state = !this.state;
+                return true;
+            }
+        }
+    ];
     constructor(state) {
         this.state = state;
     }
@@ -174,6 +186,7 @@ export class LED {
     state;
     inputNodes = [new Vec2(0, 0)];
     outputNodes = [];
+    listeners = [];
     constructor(state) {
         this.state = state;
     }

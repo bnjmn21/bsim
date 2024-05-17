@@ -19,16 +19,21 @@ const COLORS = {
 const OUTLINE_WIDTH = 8;
 const OUTLINE_COLOR = (color: Color) => color_mix(0.5, color, new RGB(0,0,0));
 
+type Hitbox = {type: "circle", center: Vec2, radius: number} | {type: "rect", pos: Vec2, size: Vec2};
+type ClickListener = {hitbox: Hitbox, fn: (e: MouseEvent) => boolean};
+
 interface IBlock {
     inputNodes: Vec2[];
     outputNodes: Vec2[];
     calculate(input: boolean[]): boolean[];
     render(ctx: CanvasRenderingContext2D): void;
+    listeners: ClickListener[];
 }
 
 export class And implements IBlock {
     inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
+    listeners = [];
     calculate(input: boolean[]): boolean[] {
         return [input.every(v => v)];
     }
@@ -71,6 +76,7 @@ export class And implements IBlock {
 export class Or implements IBlock {
     inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
+    listeners = [];
     calculate(input: boolean[]): boolean[] {
         return [input.some(v => v)];
     }
@@ -115,6 +121,7 @@ export class Or implements IBlock {
 export class Xor implements IBlock {
     inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
+    listeners = [];
     calculate(input: boolean[]): boolean[] {
         return [input.filter(v => v).length % 2 === 1]
     }
@@ -165,6 +172,15 @@ export class Toggle implements IBlock {
     state: boolean;
     inputNodes: Vec2[] = [];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
+    listeners: ClickListener[] = [
+        {
+            hitbox: {type: "rect", pos: new Vec2(0, -GRID_SIZE / 2), size: new Vec2(GRID_SIZE)},
+            fn: e => {
+                this.state = !this.state;
+                return true;
+            }
+        }
+    ];
 
     constructor(state: boolean) {
         this.state = state;
@@ -194,6 +210,7 @@ export class LED implements IBlock {
     state: boolean;
     inputNodes: Vec2[] = [new Vec2(0, 0)];
     outputNodes: Vec2[] = [];
+    listeners = [];
 
     constructor(state: boolean) {
         this.state = state;

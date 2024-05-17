@@ -15,7 +15,7 @@ let framesSinceResize = 0;
 let debugDisplay = undefined;
 export const settings = {
     graphics: {
-        blur: signals.value("high"),
+        blur: signals.value("low"),
         shaded_background: signals.value(false),
         gate_symbols: signals.value("ansi"),
     },
@@ -110,18 +110,36 @@ export function bsim(world) {
     const canvas = new Canvas(document.getElementById("main-canvas"));
     canvas.autoFitToParent();
     let canvasBackground = canvas.context2d.createImageData(canvas.size().x, canvas.size().y);
+    canvas.canvas.addEventListener("click", event => {
+        const clickPos = new Vec2(event.clientX, event.clientY);
+        for (const e of world.getEntities(Block)) {
+            for (const listener of e(Block).block.listeners) {
+                if (listener.hitbox.type == "rect") {
+                    if (rectHitbox(camera.worldToScreenCoords(listener.hitbox.pos.add(e(Block).pos.pos)), camera.worldToScreenCoords(listener.hitbox.pos.add(e(Block).pos.pos).add(listener.hitbox.size)), clickPos)) {
+                        const res = listener.fn(event);
+                        if (res) {
+                            for (const block of world.getEntities(Block)) {
+                                block(Block).output = null;
+                                block(Block).getOutput(world.getEntities(Block).map(v => v(Block)));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
     const backgroundGradient = new Gradient(Gradient.GRADIENTS.RADIAL(size => size.div(new Vec2(2))));
     backgroundGradient.startColor(new RGB(0x20, 0x20, 0x20));
     backgroundGradient.colorStopLinear(new RGB(0x10, 0x10, 0x10), 1);
     const camera = new Camera2d(canvas.size().div(new Vec2(2)).invert(), new Vec2(1));
-    camera.enableCanvasMouseControls(canvas.canvas, 2, true);
-    const toggle0 = new Block([], new Toggle(true), new Vec2(0, 0));
+    camera.enableCanvasMouseControls(canvas.canvas, 1, true);
+    const toggle0 = new Block([], new Toggle(false), new Vec2(0, 0));
     toggle0.getOutput([]);
     toggle0.render(world, camera);
     const toggle1 = new Block([], new Toggle(false), new Vec2(0, GRID_SIZE * 2));
     toggle1.getOutput([]);
     toggle1.render(world, camera);
-    const toggle2 = new Block([], new Toggle(true), new Vec2(GRID_SIZE * 4, GRID_SIZE * -1));
+    const toggle2 = new Block([], new Toggle(false), new Vec2(GRID_SIZE * 4, GRID_SIZE * -1));
     toggle2.getOutput([]);
     toggle2.render(world, camera);
     const xorGate = new Block([
@@ -553,4 +571,8 @@ function renderSettings() {
 function effectAndInit(signal, fn) {
     directEffect(signal, fn);
     fn();
+}
+function rectHitbox(pos, pos2, target) {
+    return pos.sub(target).x < 0 && pos.sub(target).y < 0 &&
+        pos2.sub(target).x > 0 && pos2.sub(target).y > 0;
 }
