@@ -111,3 +111,44 @@ body {
     pointer-events: none;
     opacity: 0;
 }
+
+
+#block-menu {
+    position: absolute;
+    top: 2.5rem;
+    right: .25rem;
+    width: 20rem;
+    max-width: 80vw;
+    padding-inline: 1rem;
+    background-color: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 5px;
+    backdrop-filter: var(--glass-backdrop-filter);
+
+    display: flex;
+    flex-direction: column;
+    align-items: end;
+}
+
+#block-menu h2 {
+    display: inline;
+    color: var(--fg-dark);
+    font-size: 1rem;
+    text-transform: uppercase;
+    margin: 0;
+    pointer-events: none;
+}
+
+#block-menu .block-category {
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+#block-menu .block {
+    border: 1px solid var(--glass-border);
+    border-radius: 3px;
+    margin-left: .4rem;
+    padding: .1rem;
+}

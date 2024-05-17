@@ -266,17 +266,23 @@ export class Plugins {
     static time = (world) => {
         const time = new Time();
         const Loop = world.schedule();
+        const AfterLoop = world.schedule();
         world.system(Loop, _ => {
             time.frame();
-            requestAnimationFrame(() => world.runSchedule(Loop));
+            requestAnimationFrame(() => {
+                world.runSchedule(Loop);
+                world.runSchedule(AfterLoop);
+            });
         });
         world.system(world.Setup, _ => {
             time.frame();
             world.runSchedule(Loop);
+            world.runSchedule(AfterLoop);
         });
         return {
             time: time,
-            Loop: Loop
+            Loop: Loop,
+            AfterLoop: AfterLoop,
         };
     };
     static default = (world) => {

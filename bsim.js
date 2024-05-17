@@ -7,6 +7,7 @@ import { Plugins } from "./engine/ecs.js";
 import { Camera2d, Canvas, CanvasObject, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
 import { I18N, LANG } from "./lang.js";
 import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode } from "./blocks.js";
+import { blockMenuPlugin } from "./ui/block_menu.js";
 export const GRID_SIZE = 80;
 let firstFrame = true;
 let resizedLastFrame = false;
@@ -14,12 +15,13 @@ let framesSinceResize = 0;
 let debugDisplay = undefined;
 export const settings = {
     graphics: {
-        blur: signals.value("low"),
+        blur: signals.value("high"),
         shaded_background: signals.value(false),
         gate_symbols: signals.value("ansi"),
     },
     advanced: {
         debug_display: signals.value(true),
+        perf_graph: signals.value(false),
     }
 };
 effectAndInit(settings.graphics.blur, () => {
@@ -45,6 +47,47 @@ effectAndInit(settings.graphics.shaded_background, () => {
         document.body.classList.add("simple-background");
     }
 });
+export const blocks = {
+    gates: [
+        {
+            default: new And(),
+            center: new Vec2(0),
+            icon_size: GRID_SIZE * 2 + 8,
+        },
+        {
+            default: new Or(),
+            center: new Vec2(0),
+            icon_size: GRID_SIZE * 2 + 8,
+        },
+        {
+            default: new Xor(),
+            center: new Vec2(0),
+            icon_size: GRID_SIZE * 2 + 8,
+        }
+    ],
+    io: [
+        {
+            default: new Toggle(false),
+            center: new Vec2(GRID_SIZE / 2, 0),
+            icon_size: GRID_SIZE * 1.5 + 8,
+        },
+        {
+            default: new LED(false),
+            center: new Vec2(GRID_SIZE / 2, 0),
+            icon_size: GRID_SIZE * 1.5 + 8,
+        }
+    ]
+};
+export const perfData = {
+    bg_rendering: 0,
+    simulation: 0,
+    html_update: 0,
+    render: 0,
+    idle: 0,
+    other: 0,
+    last_idle_start: 0,
+    last_frame_start: 0,
+};
 const circuitName = signals.value(I18N[LANG.get()].UNNAMED_CIRCUIT);
 const showSettings = signals.value(false);
 effectAndInit(showSettings, () => {
@@ -57,9 +100,10 @@ effectAndInit(showSettings, () => {
 });
 const lastFrameTimes = [];
 export function bsim(world) {
-    const { time, Loop } = world.plugin(Plugins.time);
+    const { time, Loop, AfterLoop } = world.plugin(Plugins.time);
     world.plugin(circuitPlugin);
     world.plugin(render2dPlugin);
+    world.plugin(blockMenuPlugin);
     addEventListener("resize", _ => {
         resizedLastFrame = true;
     });
@@ -116,9 +160,11 @@ export function bsim(world) {
     led1.getOutput(world.getEntities(Block).map(v => v(Block)));
     led1.render(world, camera);
     world.system(Loop, _ => {
+        perfData.last_frame_start = time.ms();
         if (resizedLastFrame) {
             framesSinceResize = 0;
         }
+        const perfBgRenderStart = time.ms();
         if (framesSinceResize === 2 || firstFrame) {
             if (settings.graphics.shaded_background.get()) {
                 canvasBackground = canvas.context2d.createImageData(canvas.size().x, canvas.size().y);
@@ -135,6 +181,7 @@ export function bsim(world) {
             canvas.context2d.clearRect(0, 0, canvas.size().x, canvas.size().y);
         }
         drawGrid(camera, canvas);
+        perfData.bg_rendering = time.ms() - perfBgRenderStart;
         if (settings.advanced.debug_display.get()) {
             if (lastFrameTimes.length > 60) {
                 lastFrameTimes.shift();
@@ -147,29 +194,37 @@ export function bsim(world) {
             debugDisplay.textContent =
                 `FPS: ${avgFPS.toFixed(2)}`;
         }
+        perfData.render = 0;
     });
     world.system(Loop, [Block, CanvasObject, Transform], entities => {
+        const renderStart = time.ms();
         for (const e of entities) {
             if (e.has(CanvasObject) && e.has(Transform)) {
                 e(CanvasObject).render(canvas.context2d, e(Transform));
             }
         }
+        perfData.render += time.ms() - renderStart;
     });
     world.system(Loop, [OutputNode, CanvasObject, Transform], entities => {
+        const renderStart = time.ms();
         for (const e of entities) {
             if (e.has(CanvasObject) && e.has(Transform)) {
                 e(CanvasObject).render(canvas.context2d, e(Transform));
             }
         }
+        perfData.render += time.ms() - renderStart;
     });
     world.system(Loop, [InputNode, CanvasObject, Transform], entities => {
+        const renderStart = time.ms();
         for (const e of entities) {
             if (e.has(CanvasObject) && e.has(Transform)) {
                 e(CanvasObject).render(canvas.context2d, e(Transform));
             }
         }
+        perfData.render += time.ms() - renderStart;
     });
     world.system(Loop, [InputNode], entities => {
+        const renderStart = time.ms();
         for (const e of entities) {
             const input = e(InputNode).ref.inputs[e(InputNode).inputId];
             if (typeof input !== "boolean") {
@@ -181,10 +236,10 @@ export function bsim(world) {
                     ctx.fillRect(0, 0, 100, 100);
                 }
                 if (input.block.output[input.outputId]) {
-                    ctx.strokeStyle = "#007f00";
+                    ctx.strokeStyle = "#7f0000";
                 }
                 else {
-                    ctx.strokeStyle = "#7f0000";
+                    ctx.strokeStyle = "#3f3f3f";
                 }
                 ctx.lineWidth = GRID_SIZE / 4 + 16;
                 ctx.lineCap = "round";
@@ -195,10 +250,10 @@ export function bsim(world) {
                 ctx.lineTo(endPos.x, endPos.y);
                 ctx.stroke();
                 if (input.block.output[input.outputId]) {
-                    ctx.strokeStyle = "#00ff00";
+                    ctx.strokeStyle = "#ff0000";
                 }
                 else {
-                    ctx.strokeStyle = "#ff0000";
+                    ctx.strokeStyle = "#7f7f7f";
                 }
                 ctx.lineWidth = GRID_SIZE / 4;
                 ctx.lineCap = "round";
@@ -209,9 +264,54 @@ export function bsim(world) {
                 ctx.restore();
             }
         }
+        perfData.render += time.ms() - renderStart;
     });
     renderTitleBar();
-    createSettings();
+    renderSettings();
+    world.system(AfterLoop, () => {
+        const total = time.ms() - perfData.last_frame_start;
+        perfData.idle = time.ms() - perfData.last_idle_start;
+        const totalWithIdle = total + perfData.idle;
+        perfData.other = total - (perfData.bg_rendering + perfData.render);
+        if (settings.advanced.perf_graph.get()) {
+            const ctx = canvas.context2d;
+            ctx.textAlign = "center";
+            ctx.font = `10px "JetBrains Mono", monospace`;
+            let currTotal = 0;
+            ctx.fillStyle = "#ffff00";
+            ctx.beginPath();
+            ctx.moveTo(canvas.size().x - 200, canvas.size().y - 200);
+            ctx.arc(canvas.size().x - 200, canvas.size().y - 200, 150, 2 * Math.PI * (currTotal / totalWithIdle), 2 * Math.PI * ((currTotal + perfData.bg_rendering) / totalWithIdle));
+            ctx.lineTo(canvas.size().x - 200, canvas.size().y - 200);
+            ctx.fill();
+            ctx.fillText("bg_rendering", canvas.size().x - 200, canvas.size().y - 360);
+            currTotal += perfData.bg_rendering;
+            ctx.fillStyle = "#ff00ff";
+            ctx.beginPath();
+            ctx.moveTo(canvas.size().x - 200, canvas.size().y - 200);
+            ctx.arc(canvas.size().x - 200, canvas.size().y - 200, 150, 2 * Math.PI * (currTotal / totalWithIdle), 2 * Math.PI * ((currTotal + perfData.render) / totalWithIdle));
+            ctx.lineTo(canvas.size().x - 200, canvas.size().y - 200);
+            ctx.fill();
+            ctx.fillText("blocks_rendering", canvas.size().x - 200, canvas.size().y - 370);
+            currTotal += perfData.render;
+            ctx.fillStyle = "#00ffff";
+            ctx.beginPath();
+            ctx.moveTo(canvas.size().x - 200, canvas.size().y - 200);
+            ctx.arc(canvas.size().x - 200, canvas.size().y - 200, 150, 2 * Math.PI * (currTotal / totalWithIdle), 2 * Math.PI * ((currTotal + perfData.other) / totalWithIdle));
+            ctx.lineTo(canvas.size().x - 200, canvas.size().y - 200);
+            ctx.fill();
+            ctx.fillText("other", canvas.size().x - 200, canvas.size().y - 380);
+            currTotal += perfData.other;
+            ctx.fillStyle = "#000000";
+            ctx.beginPath();
+            ctx.moveTo(canvas.size().x - 200, canvas.size().y - 200);
+            ctx.arc(canvas.size().x - 200, canvas.size().y - 200, 150, 2 * Math.PI * (currTotal / totalWithIdle), 2 * Math.PI * ((currTotal + perfData.idle) / totalWithIdle));
+            ctx.lineTo(canvas.size().x - 200, canvas.size().y - 200);
+            ctx.fill();
+            currTotal += perfData.idle;
+        }
+        perfData.last_idle_start = time.ms();
+    });
 }
 function renderTitleBar() {
     const titleBarTextEditSizeTest = document.getElementById("title-bar-text-edit");
@@ -343,7 +443,7 @@ function drawGrid(camera, canvas) {
         ctx.stroke();
     }
 }
-function createSettings() {
+function renderSettings() {
     const settingsUi = new JSML(document.getElementById("settings-window"));
     settingsUi.ui(ui => {
         ui.div(ui => {
@@ -433,6 +533,17 @@ function createSettings() {
                         ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.SHOW))
                             .classIf("focus", settings.advanced.debug_display)
                             .click(_ => settings.advanced.debug_display.set(true));
+                    }).class("settings-buttons-select");
+                    ui.h4(ui => {
+                        ui.text(I18N[LANG.get()].SETTINGS.PERF_GRAPH);
+                    });
+                    ui.div(ui => {
+                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.HIDE))
+                            .classIf("focus", () => !settings.advanced.perf_graph.get())
+                            .click(_ => settings.advanced.perf_graph.set(false));
+                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.SHOW))
+                            .classIf("focus", settings.advanced.perf_graph)
+                            .click(_ => settings.advanced.perf_graph.set(true));
                     }).class("settings-buttons-select");
                 }).class("settings-subsection-inner");
             }).class("settings-subsection");

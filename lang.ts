@@ -22,13 +22,16 @@ export const I18N = {
             GATE_SYMBOLS_IEC: "IEC (EU)",
             ADVANCED: "Advanced",
             DEBUG_DISPLAY: "Debug info",
+            PERF_GRAPH: "Performance graph",
 
             HIGH: "High",
             LOW: "Low",
             OFF: "Off",
             SHOW: "Show",
             HIDE: "Hide",
-        }
+        },
+        GATES: "Gates",
+        IO: "I/O",
     },
     de_de: {
         NAME: "BSim",
@@ -51,13 +54,16 @@ export const I18N = {
             GATE_SYMBOLS_IEC: "IEC (EU)",
             ADVANCED: "Erweitert",
             DEBUG_DISPLAY: "Debug-Informationen",
+            PERF_GRAPH: "Performance-Graph",
 
             HIGH: "Hoch",
             LOW: "Niedrig",
             OFF: "Aus",
             SHOW: "Anzeigen",
             HIDE: "Verstecken",
-        }
+        },
+        GATES: "Gatter",
+        IO: "I/O",
     },
     la_ro: {
         NAME: "BSim",
@@ -75,18 +81,21 @@ export const I18N = {
             BACKGROUND: "Recessus",
             BACKGROUND_FLAT: "Planus",
             BACKGROUND_SHADED: "Colos",
-            GATE_SYMBOLS: "[[Untranslated]]",
+            GATE_SYMBOLS: "la_ro/SETTINGS/GATE_SYMBOLS",
             GATE_SYMBOLS_ANSI: "ANSI (Terra ignota)",
             GATE_SYMBOLS_IEC: "IEC (???)",
             ADVANCED: "plus",
             DEBUG_DISPLAY: "Informatio",
+            PERF_GRAPH: "la_ro/SETTINGS/PERF_GRAPH",
 
             HIGH: "Altus",
             LOW: "Brevis",
             OFF: "Nihil",
             SHOW: "Demonstrare",
             HIDE: "Occultare",
-        }
+        },
+        GATES: "la_ro/GATES",
+        IO: "la_ro/IO",
     }
 }
 
