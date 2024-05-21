@@ -43,5 +43,4 @@ export function blockMenuPlugin(world: World) {
             }
         }).class("block-category");
     });
-
 }

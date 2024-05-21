@@ -98,9 +98,13 @@ export class Camera2d {
         this.rawScale = 1;
     }
     enableCanvasMouseControls(htmlObject, translateMouseButton, enableScrollZoom) {
+        let mouseTarget = null;
         if (translateMouseButton) {
+            document.addEventListener("mousedown", e => {
+                mouseTarget = e.target;
+            });
             htmlObject.addEventListener("mousemove", e => {
-                if (e.buttons & translateMouseButton) {
+                if (e.buttons & translateMouseButton && mouseTarget === htmlObject) {
                     this.position.subAssign(new Vec2(e.movementX, e.movementY).mul(this.scale));
                 }
             });

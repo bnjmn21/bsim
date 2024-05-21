@@ -1,7 +1,8 @@
-import { GRID_SIZE, perfData, settings } from "./bsim.js";
+import { GRID_SIZE, settings } from "./bsim.js";
 import { Color, RGB, color_mix } from "./engine/colors.js";
 import { EntityWrapper, Plugins, World } from "./engine/ecs.js";
 import { Camera2d, CameraTransform, CanvasObject, SharedTranslate, Transform, Vec2 } from "./engine/engine.js";
+import { perfData } from "./ui/debug_view.js";
 
 const COLORS = {
     AND: new RGB(0x00, 0xf7, 0xff),
@@ -382,15 +383,12 @@ export class InputNode {
 export function circuitPlugin(world: World) {
     const { time, Loop } = world.plugin(Plugins.time);
     world.system(Loop, OutputNode, entities => {
-        const renderStart = time.ms();
         for (const e of entities) {
             const output = e(OutputNode);
             output.state = output.ref.getOutput(world.getEntities(Block).map(e => e(Block)))[output.outputId] as boolean;
         }
-        perfData.render += time.ms() - renderStart;
     });
     world.system(Loop, InputNode, entities => {
-        const renderStart = time.ms();
         for (const e of entities) {
             const input = e(InputNode);
             input.ref.getOutput(world.getEntities(Block).map(e => e(Block)));
@@ -401,6 +399,5 @@ export function circuitPlugin(world: World) {
                 input.state = inputVal.block.getOutput(world.getEntities(Block).map(e => e(Block)))[inputVal.outputId];
             }
         }
-        perfData.render += time.ms() - renderStart;
     });
 }

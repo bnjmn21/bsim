@@ -21,7 +21,7 @@ export const I18N = {
             GATE_SYMBOLS_ANSI: "ANSI (American)",
             GATE_SYMBOLS_IEC: "IEC (EU)",
             ADVANCED: "Advanced",
-            DEBUG_DISPLAY: "Debug info",
+            DEBUG_DISPLAY: "FPS graph",
             PERF_GRAPH: "Performance graph",
 
             HIGH: "High",
@@ -53,7 +53,7 @@ export const I18N = {
             GATE_SYMBOLS_ANSI: "ANSI (Amerikanisch)",
             GATE_SYMBOLS_IEC: "IEC (EU)",
             ADVANCED: "Erweitert",
-            DEBUG_DISPLAY: "Debug-Informationen",
+            DEBUG_DISPLAY: "FPS-Graph",
             PERF_GRAPH: "Performance-Graph",
 
             HIGH: "Hoch",

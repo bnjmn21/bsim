@@ -3,18 +3,20 @@ import { JSML } from "./jsml/jsml.js";
 import { Signal, directEffect, signals } from "./jsml/signals.js";
 import { Gradient } from "./engine/gradient.js";
 import { RGB } from "./engine/colors.js";
-import { Plugins, World } from "./engine/ecs.js";
+import { Plugins, Time, World } from "./engine/ecs.js";
 import { Camera2d, CameraTransform, Canvas, CanvasObject, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
 import { I18N, LANG } from "./lang.js";
 import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode } from "./blocks.js";
 import { blockMenuPlugin } from "./ui/block_menu.js";
+import { titleBarPlugin } from "./ui/title_bar.js";
+import { debugViewPlugin, perfData, timed } from "./ui/debug_view.js";
+import { settingsPlugin } from "./ui/settings.js";
 
 export const GRID_SIZE = 80;
 
 let firstFrame = true;
 let resizedLastFrame = false;
 let framesSinceResize = 0;
-let debugDisplay: HTMLElement | undefined = undefined;
 
 export const settings = {
     graphics: {
@@ -80,45 +82,33 @@ export const blocks = {
     ]
 }
 
-export const perfData = {
-    bg_rendering: 0,
-    simulation: 0,
-    html_update: 0,
-    render: 0,
+export const circuitName = signals.value(I18N[LANG.get()].UNNAMED_CIRCUIT);
 
-    idle: 0,
-    other: 0,
-
-    last_idle_start: 0,
-    last_frame_start: 0,
-};
-
-const circuitName = signals.value(I18N[LANG.get()].UNNAMED_CIRCUIT);
-
-const showSettings = signals.value(false);
-effectAndInit(showSettings, () => {
-    if (showSettings.get()) {
-        (document.getElementById("settings-container") as HTMLElement).classList.add("show");
-    } else {
-        (document.getElementById("settings-container") as HTMLElement).classList.remove("show");
-    }
-});
-
-const lastFrameTimes: number[] = [];
+export const canvas = new Canvas(document.getElementById("main-canvas") as HTMLCanvasElement);
+export const overlayCanvas = new Canvas(document.getElementById("overlay-canvas") as HTMLCanvasElement);
 
 export function bsim(world: World) {
     const { time, Loop, AfterLoop } = world.plugin(Plugins.time);
+
+    world.system(Loop, () => {
+       overlayCanvas.context2d.clearRect(0, 0, overlayCanvas.size().x, overlayCanvas.size().y);
+    });
+
+    world.plugin(debugViewPlugin);
     world.plugin(circuitPlugin);
     world.plugin(render2dPlugin);
     world.plugin(blockMenuPlugin);
+    world.plugin(titleBarPlugin);
+    world.plugin(settingsPlugin);
 
     addEventListener("resize", _ => {
         resizedLastFrame = true;
     });
 
-    const canvas = new Canvas(document.getElementById("main-canvas") as HTMLCanvasElement);
     canvas.autoFitToParent();
     let canvasBackground = canvas.context2d.createImageData(canvas.size().x, canvas.size().y);
+
+    overlayCanvas.autoFitToParent();
 
     canvas.canvas.addEventListener("click", event => {
         const clickPos = new Vec2(event.clientX, event.clientY);
@@ -205,260 +195,101 @@ export function bsim(world: World) {
     led1.render(world, camera);
 
     world.system(Loop, _ => {
-        perfData.last_frame_start = time.ms();
-
         if (resizedLastFrame) {
             framesSinceResize = 0;
         }
-        const perfBgRenderStart = time.ms();
-        if (framesSinceResize === 2 || firstFrame) {
+        perfData.render.bg = timed(time, () => {
+            if (framesSinceResize === 2 || firstFrame) {
+                if (settings.graphics.shaded_background.get()) {
+                    canvasBackground = canvas.context2d.createImageData(canvas.size().x, canvas.size().y);
+                    backgroundGradient.renderTo(canvasBackground);
+                }
+            }
+    
+            firstFrame = false;
+            resizedLastFrame = false;
+            framesSinceResize++;
+    
             if (settings.graphics.shaded_background.get()) {
-                canvasBackground = canvas.context2d.createImageData(canvas.size().x, canvas.size().y);
-                backgroundGradient.renderTo(canvasBackground);
-            }
-        }
-
-        firstFrame = false;
-        resizedLastFrame = false;
-        framesSinceResize++;
-
-        if (settings.graphics.shaded_background.get()) {
-            canvas.context2d.putImageData(canvasBackground, 0, 0);
-        } else {
-            canvas.context2d.clearRect(0, 0, canvas.size().x, canvas.size().y);
-        }
-        drawGrid(camera, canvas);
-        perfData.bg_rendering = time.ms() - perfBgRenderStart;
-
-        if (settings.advanced.debug_display.get()) {
-            if (lastFrameTimes.length > 60) {
-                lastFrameTimes.shift();
-                lastFrameTimes.push(time.s());
+                canvas.context2d.putImageData(canvasBackground, 0, 0);
             } else {
-                lastFrameTimes.push(time.s());
+                canvas.context2d.clearRect(0, 0, canvas.size().x, canvas.size().y);
             }
-            const avgFPS = 1 / ((lastFrameTimes[lastFrameTimes.length - 1] - lastFrameTimes[0]) / lastFrameTimes.length);
-            (debugDisplay as HTMLElement).textContent =
-                `FPS: ${avgFPS.toFixed(2)}`;
-        }
-        perfData.render = 0;
+            drawGrid(camera, canvas);
+        })[0];
     });
 
     world.system(Loop, [Block, CanvasObject, Transform], entities => {
-        const renderStart = time.ms();
-        for (const e of entities) {
-            if (e.has(CanvasObject) && e.has(Transform)) {
-                e(CanvasObject).render(canvas.context2d, e(Transform));
+        perfData.render.blocks += timed(time, () => {
+            for (const e of entities) {
+                if (e.has(CanvasObject) && e.has(Transform)) {
+                    e(CanvasObject).render(canvas.context2d, e(Transform));
+                }
             }
-        }
-        perfData.render += time.ms() - renderStart;
+        })[0];
     });
     world.system(Loop, [OutputNode, CanvasObject, Transform], entities => {
-        const renderStart = time.ms();
-        for (const e of entities) {
-            if (e.has(CanvasObject) && e.has(Transform)) {
-                e(CanvasObject).render(canvas.context2d, e(Transform));
+        perfData.render.nodes += timed(time, () => {
+            for (const e of entities) {
+                if (e.has(CanvasObject) && e.has(Transform)) {
+                    e(CanvasObject).render(canvas.context2d, e(Transform));
+                }
             }
-        }
-        perfData.render += time.ms() - renderStart;
+        })[0];
     });
     world.system(Loop, [InputNode, CanvasObject, Transform], entities => {
-        const renderStart = time.ms();
-        for (const e of entities) {
-            if (e.has(CanvasObject) && e.has(Transform)) {
-                e(CanvasObject).render(canvas.context2d, e(Transform));
+        perfData.render.nodes += timed(time, () => {
+            for (const e of entities) {
+                if (e.has(CanvasObject) && e.has(Transform)) {
+                    e(CanvasObject).render(canvas.context2d, e(Transform));
+                }
             }
-        }
-        perfData.render += time.ms() - renderStart;
+        })[0];
     });
-    world.system(Loop, [InputNode], entities => {
-        const renderStart = time.ms();
-        for (const e of entities) {
-            const input = e(InputNode).ref.inputs[e(InputNode).inputId];
-            if (typeof input !== "boolean") {
-                const startPos = input.block.pos.pos.add(
-                    input.block.block.outputNodes[input.outputId]
-                );
-                const endPos = e(InputNode).ref.pos.pos.add(
-                    e(InputNode).ref.block.inputNodes[e(InputNode).inputId]
-                );
-                const ctx = canvas.context2d;
-                if (input.block.output === null) {
-                    ctx.fillStyle = "#ffffff";
-                    ctx.fillRect(0, 0, 100, 100);
-                }
-                if ((input.block.output as Boolean[])[input.outputId]) {
-                    ctx.strokeStyle = "#7f0000";
-                } else {
-                    ctx.strokeStyle = "#3f3f3f";
-                }
-                ctx.lineWidth = GRID_SIZE / 4 + 16;
-                ctx.lineCap = "round";
-                ctx.save();
-                camera.toTransform().applyTransforms(ctx);
-                ctx.beginPath();
-                ctx.moveTo(startPos.x, startPos.y);
-                ctx.lineTo(endPos.x, endPos.y);
-                ctx.stroke();
-                if ((input.block.output as Boolean[])[input.outputId]) {
-                    ctx.strokeStyle = "#ff0000";
-                } else {
-                    ctx.strokeStyle = "#7f7f7f";
-                }
-                ctx.lineWidth = GRID_SIZE / 4;
-                ctx.lineCap = "round";
-                ctx.beginPath();
-                ctx.moveTo(startPos.x, startPos.y);
-                ctx.lineTo(endPos.x, endPos.y);
-                ctx.stroke();
-                ctx.restore();
-            }
-        }
-        perfData.render += time.ms() - renderStart;
-    });
-
-    renderTitleBar();
-    renderSettings();
-
-    world.system(AfterLoop, () => {
-        const total = time.ms() - perfData.last_frame_start;
-        perfData.idle = time.ms() - perfData.last_idle_start;
-        const totalWithIdle = total + perfData.idle;
-        perfData.other = total - (perfData.bg_rendering + perfData.render);
-        if (settings.advanced.perf_graph.get()) {
-            const ctx = canvas.context2d;
-            ctx.textAlign = "center";
-            ctx.font = `10px "JetBrains Mono", monospace`;
-            let currTotal = 0;
-            ctx.fillStyle = "#ffff00";
-            ctx.beginPath();
-            ctx.moveTo(canvas.size().x - 200, canvas.size().y - 200);
-            ctx.arc(canvas.size().x - 200, canvas.size().y - 200, 150, 2 * Math.PI * (currTotal / totalWithIdle), 2 * Math.PI * ((currTotal + perfData.bg_rendering) / totalWithIdle));
-            ctx.lineTo(canvas.size().x - 200, canvas.size().y - 200);
-            ctx.fill();
-            ctx.fillText("bg_rendering", canvas.size().x - 200, canvas.size().y - 360);
-            currTotal += perfData.bg_rendering;
-            ctx.fillStyle = "#ff00ff";
-            ctx.beginPath();
-            ctx.moveTo(canvas.size().x - 200, canvas.size().y - 200);
-            ctx.arc(canvas.size().x - 200, canvas.size().y - 200, 150, 2 * Math.PI * (currTotal / totalWithIdle), 2 * Math.PI * ((currTotal + perfData.render) / totalWithIdle));
-            ctx.lineTo(canvas.size().x - 200, canvas.size().y - 200);
-            ctx.fill();
-            ctx.fillText("blocks_rendering", canvas.size().x - 200, canvas.size().y - 370);
-            currTotal += perfData.render;
-            ctx.fillStyle = "#00ffff";
-            ctx.beginPath();
-            ctx.moveTo(canvas.size().x - 200, canvas.size().y - 200);
-            ctx.arc(canvas.size().x - 200, canvas.size().y - 200, 150, 2 * Math.PI * (currTotal / totalWithIdle), 2 * Math.PI * ((currTotal + perfData.other) / totalWithIdle));
-            ctx.lineTo(canvas.size().x - 200, canvas.size().y - 200);
-            ctx.fill();
-            ctx.fillText("other", canvas.size().x - 200, canvas.size().y - 380);
-            currTotal += perfData.other;
-            ctx.fillStyle = "#000000";
-            ctx.beginPath();
-            ctx.moveTo(canvas.size().x - 200, canvas.size().y - 200);
-            ctx.arc(canvas.size().x - 200, canvas.size().y - 200, 150, 2 * Math.PI * (currTotal / totalWithIdle), 2 * Math.PI * ((currTotal + perfData.idle) / totalWithIdle));
-            ctx.lineTo(canvas.size().x - 200, canvas.size().y - 200);
-            ctx.fill();
-            currTotal += perfData.idle;
-        }
-        perfData.last_idle_start = time.ms();
-    });
-}
-
-function renderTitleBar() {
-    const titleBarTextEditSizeTest = document.getElementById("title-bar-text-edit") as HTMLElement;
-
-    let tempName = circuitName.get();
-    const editingName = signals.value(false);
-    const editFieldWidth = signals.computed(() => {
-        titleBarTextEditSizeTest.innerText = tempName;
-        return `${titleBarTextEditSizeTest.offsetWidth}px`;
-    });
-
-    let previousLang = LANG.get();
-    effectAndInit(LANG, () => {
-        if (circuitName.get() === I18N[previousLang].UNNAMED_CIRCUIT) {
-            circuitName.set(I18N[LANG.get()].UNNAMED_CIRCUIT);
-            tempName = circuitName.get();
-        }
-        previousLang = LANG.get();
-    });
-
-    const circuitNameIsNull = signals.computed(() => circuitName.get() === null);
-
-    const titleBar = new JSML(document.getElementById("title-bar") as HTMLElement);
-    let renameField: HTMLElement | null = null;
-    let editBtn: HTMLElement | null = null;
-
-    titleBar.ui(ui => {
-        ui.h1(ui => {
-            ui.text(I18N[LANG.get()].NAME);
-        });
-        if (!circuitNameIsNull.get()) {
-            ui.p(ui => ui.text("/")).class("slash");
-            ui.div(ui => {
-                if (!editingName.get()) {
-                    ui.p(ui => ui.text(() => `${circuitName.get()}`)).class("sub-section");
-                } else {
-                    editFieldWidth.setDirty();
-                    ui.tag("input", () => {})
-                        .attribute("type", "text")
-                        .attribute("value", tempName)
-                        .class("rename-input")
-                        .style("width", editFieldWidth)
-                        .then(e => {
-                            renameField = e;
-                            e.focus();
-                        })
-                        .addEventListener("input", e => {
-                            tempName = (e.target as HTMLInputElement).value;
-                            editFieldWidth.setDirty();
-                        })
-                        .addEventListener("blur", e => {
-                            if (e.target === renameField && e.relatedTarget !== editBtn) {
-                                editingName.set(false);
-                                circuitName.set(tempName);
-                            }
-                        })
-                        .addEventListener("keypress", e => {
-                            if (e.key === "Enter") {
-                                (e.target as HTMLElement).blur();
-                            }
-                        });
-                }
-            });
-            ui.button(ui => {
-                ui.html(icons.edit)
-                    .class("icon")
-                    .classIf("focus", editingName);
-            })
-                .class("icon-btn")
-                .click(() => {
-                    editingName.set(!editingName.get());
-                    if (editingName.get()) {
-                        tempName = circuitName.get();
-                    } else {
-                        circuitName.set(tempName);
+    world.system(Loop, InputNode, entities => {
+        perfData.render.wires += timed(time, () => {
+            for (const e of entities) {
+                const input = e(InputNode).ref.inputs[e(InputNode).inputId];
+                if (typeof input !== "boolean") {
+                    const startPos = input.block.pos.pos.add(
+                        input.block.block.outputNodes[input.outputId]
+                    );
+                    const endPos = e(InputNode).ref.pos.pos.add(
+                        e(InputNode).ref.block.inputNodes[e(InputNode).inputId]
+                    );
+                    const ctx = canvas.context2d;
+                    if (input.block.output === null) {
+                        ctx.fillStyle = "#ffffff";
+                        ctx.fillRect(0, 0, 100, 100);
                     }
-                })
-                .then(e => {
-                    editBtn = e;
-                });
-            ui.div(_ => {}).class("side-seperator");
-            ui.button(ui => {
-                ui.html(icons.settings).class("icon");
-            })
-                .class("icon-btn")
-                .click(_ => {
-                    showSettings.set(true);
-                });
-        }
-        if (settings.advanced.debug_display.get()) {
-            ui.p(ui => {}).class("fps-display").then(e => {
-                debugDisplay = e;
-            });
-        }
+                    if ((input.block.output as Boolean[])[input.outputId]) {
+                        ctx.strokeStyle = "#7f0000";
+                    } else {
+                        ctx.strokeStyle = "#3f3f3f";
+                    }
+                    ctx.lineWidth = GRID_SIZE / 4 + 16;
+                    ctx.lineCap = "round";
+                    ctx.save();
+                    camera.toTransform().applyTransforms(ctx);
+                    ctx.beginPath();
+                    ctx.moveTo(startPos.x, startPos.y);
+                    ctx.lineTo(endPos.x, endPos.y);
+                    ctx.stroke();
+                    if ((input.block.output as Boolean[])[input.outputId]) {
+                        ctx.strokeStyle = "#ff0000";
+                    } else {
+                        ctx.strokeStyle = "#7f7f7f";
+                    }
+                    ctx.lineWidth = GRID_SIZE / 4;
+                    ctx.lineCap = "round";
+                    ctx.beginPath();
+                    ctx.moveTo(startPos.x, startPos.y);
+                    ctx.lineTo(endPos.x, endPos.y);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+        })[0];
     });
 }
 
@@ -499,115 +330,7 @@ function drawGrid(camera: Camera2d, canvas: Canvas) {
     }
 }
 
-function renderSettings() {
-    const settingsUi = new JSML(document.getElementById("settings-window") as HTMLElement);
-    settingsUi.ui(ui => {
-        ui.div(ui => {
-            ui.h2(ui => ui.text(I18N[LANG.get()].SETTINGS.TITLE));
-            ui.div(_ => {}).class("side-seperator");
-            ui.button(ui => {
-                ui.html(icons.close).class("icon");
-            })
-                .class("icon-btn")
-                .click(_ => {
-                    showSettings.set(false);
-                });
-        }).class("settings-title-bar");
-        ui.div(ui => {
-            ui.h3(ui => {
-                ui.html(icons.language).class("icon");
-                ui.text(I18N[LANG.get()].SETTINGS.LANGUAGE);
-            });
-            ui.div(ui => {
-                ui.button(ui => ui.text(I18N["en_us"].LANGS.EN_US))
-                    .classIf("focus", () => LANG.get() === "en_us")
-                    .click(_ => LANG.set("en_us"));
-                ui.button(ui => ui.text(I18N["de_de"].LANGS.DE_DE))
-                    .classIf("focus", () => LANG.get() === "de_de")
-                    .click(_ => LANG.set("de_de"));
-                ui.button(ui => ui.text(I18N["la_ro"].LANGS.LA_RO))
-                    .classIf("focus", () => LANG.get() === "la_ro")
-                    .click(_ => LANG.set("la_ro"));
-            }).class("settings-buttons-select");
-            ui.div(ui => {
-                ui.h3(ui => {
-                    ui.html(icons.display).class("icon");
-                    ui.text(I18N[LANG.get()].SETTINGS.GRAPHICS);
-                });
-                ui.div(ui => {
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.BLUR);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.OFF))
-                            .classIf("focus", () => settings.graphics.blur.get() === "off")
-                            .click(_ => settings.graphics.blur.set("off"));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.LOW))
-                            .classIf("focus", () => settings.graphics.blur.get() === "low")
-                            .click(_ => settings.graphics.blur.set("low"));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.HIGH))
-                            .classIf("focus", () => settings.graphics.blur.get() === "high")
-                            .click(_ => settings.graphics.blur.set("high"));
-                    }).class("settings-buttons-select");
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.BACKGROUND);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.BACKGROUND_FLAT))
-                            .classIf("focus", () => !settings.graphics.shaded_background.get())
-                            .click(_ => settings.graphics.shaded_background.set(false));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.BACKGROUND_SHADED))
-                            .classIf("focus", settings.graphics.shaded_background)
-                            .click(_ => settings.graphics.shaded_background.set(true));
-                    }).class("settings-buttons-select");
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.GATE_SYMBOLS);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.GATE_SYMBOLS_ANSI))
-                            .classIf("focus", () => settings.graphics.gate_symbols.get() === "ansi")
-                            .click(_ => settings.graphics.gate_symbols.set("ansi"));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.GATE_SYMBOLS_IEC))
-                            .classIf("focus", () => settings.graphics.gate_symbols.get() === "iec")
-                            .click(_ => settings.graphics.gate_symbols.set("iec"));
-                    }).class("settings-buttons-select");
-                }).class("settings-subsection-inner");
-            }).class("settings-subsection");
-            ui.div(ui => {
-                ui.h3(ui => {
-                    ui.html(icons.cube).class("icon");
-                    ui.text(I18N[LANG.get()].SETTINGS.ADVANCED);
-                });
-                ui.div(ui => {
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.DEBUG_DISPLAY);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.HIDE))
-                            .classIf("focus", () => !settings.advanced.debug_display.get())
-                            .click(_ => settings.advanced.debug_display.set(false));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.SHOW))
-                            .classIf("focus", settings.advanced.debug_display)
-                            .click(_ => settings.advanced.debug_display.set(true));
-                    }).class("settings-buttons-select");
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.PERF_GRAPH);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.HIDE))
-                            .classIf("focus", () => !settings.advanced.perf_graph.get())
-                            .click(_ => settings.advanced.perf_graph.set(false));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.SHOW))
-                            .classIf("focus", settings.advanced.perf_graph)
-                            .click(_ => settings.advanced.perf_graph.set(true));
-                    }).class("settings-buttons-select");
-                }).class("settings-subsection-inner");
-            }).class("settings-subsection");
-        }).class("settings-main");
-    });
-}
-
-function effectAndInit(signal: Signal<any>, fn: () => void) {
+export function effectAndInit(signal: Signal<any>, fn: () => void) {
     directEffect(signal, fn);
     fn();
 }
