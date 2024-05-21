@@ -1,5 +1,3 @@
-import * as icons from "./icons.js";
-import { JSML } from "./jsml/jsml.js";
 import { Signal, directEffect, signals } from "./jsml/signals.js";
 import { Gradient } from "./engine/gradient.js";
 import { RGB } from "./engine/colors.js";

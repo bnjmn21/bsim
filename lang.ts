@@ -30,8 +30,22 @@ export const I18N = {
             SHOW: "Show",
             HIDE: "Hide",
         },
-        GATES: "Gates",
-        IO: "I/O",
+        CATEGORIES: {
+            GATES: "Gates",
+            IO: "I/O", 
+        },
+        BLOCKS: {
+            AND: "AND",
+            OR: "OR",
+            XOR: "XOR",
+            NOT: "NOT",
+            NAND: "NAND",
+            NOR: "NOR",
+            NXOR: "NXOR",
+
+            TOGGLE: "Toggle",
+            LED: "LED",
+        }
     },
     de_de: {
         NAME: "BSim",
@@ -62,8 +76,22 @@ export const I18N = {
             SHOW: "Anzeigen",
             HIDE: "Verstecken",
         },
-        GATES: "Gatter",
-        IO: "I/O",
+        CATEGORIES: {
+            GATES: "Gatter",
+            IO: "I/O", 
+        },
+        BLOCKS: {
+            AND: "UND",
+            OR: "ODER",
+            XOR: "X-ODER",
+            NOT: "NICHT",
+            NAND: "N-UND",
+            NOR: "N-ODER",
+            NXOR: "NX-ODER",
+
+            TOGGLE: "Toggle",
+            LED: "LED",
+        }
     },
     la_ro: {
         NAME: "BSim",
@@ -94,8 +122,22 @@ export const I18N = {
             SHOW: "Demonstrare",
             HIDE: "Occultare",
         },
-        GATES: "la_ro/GATES",
-        IO: "la_ro/IO",
+        CATEGORIES: {
+            GATES: "Gates",
+            IO: "I/O", 
+        },
+        BLOCKS: {
+            AND: "AND",
+            OR: "OR",
+            XOR: "XOR",
+            NOT: "NOT",
+            NAND: "NAND",
+            NOR: "NOR",
+            NXOR: "NXOR",
+
+            TOGGLE: "Toggle",
+            LED: "LED",
+        }
     }
 }
 
