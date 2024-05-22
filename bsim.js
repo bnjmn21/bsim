@@ -52,29 +52,34 @@ export const blocks = {
         {
             default: new And(),
             center: new Vec2(0),
-            icon_size: GRID_SIZE * 2 + 8,
+            iconSize: GRID_SIZE * 2 + 8,
+            name: "AND",
         },
         {
             default: new Or(),
             center: new Vec2(0),
-            icon_size: GRID_SIZE * 2 + 8,
+            iconSize: GRID_SIZE * 2 + 8,
+            name: "OR",
         },
         {
             default: new Xor(),
             center: new Vec2(0),
-            icon_size: GRID_SIZE * 2 + 8,
+            iconSize: GRID_SIZE * 2 + 8,
+            name: "XOR",
         }
     ],
     io: [
         {
             default: new Toggle(false),
             center: new Vec2(GRID_SIZE / 2, 0),
-            icon_size: GRID_SIZE * 1.5 + 8,
+            iconSize: GRID_SIZE * 1.5 + 8,
+            name: "TOGGLE",
         },
         {
             default: new LED(false),
             center: new Vec2(GRID_SIZE / 2, 0),
-            icon_size: GRID_SIZE * 1.5 + 8,
+            iconSize: GRID_SIZE * 1.5 + 8,
+            name: "LED",
         }
     ]
 };

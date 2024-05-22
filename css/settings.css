@@ -26,6 +26,7 @@
     border: 1px solid var(--border);
     border-radius: .2rem;
     box-shadow: var(--window-shadow);
+    overflow-y: auto;
 }
 
 .settings-title-bar {

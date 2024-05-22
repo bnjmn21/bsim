@@ -23,7 +23,7 @@ const OUTLINE_COLOR = (color: Color) => color_mix(0.5, color, new RGB(0,0,0));
 type Hitbox = {type: "circle", center: Vec2, radius: number} | {type: "rect", pos: Vec2, size: Vec2};
 type ClickListener = {hitbox: Hitbox, fn: (e: MouseEvent) => boolean};
 
-interface IBlock {
+export interface IBlock {
     inputNodes: Vec2[];
     outputNodes: Vec2[];
     calculate(input: boolean[]): boolean[];

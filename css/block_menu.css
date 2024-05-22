@@ -1,0 +1,70 @@
+#block-menu {
+    position: absolute;
+    top: 2.5rem;
+    right: .25rem;
+    width: 20rem;
+    max-width: 80vw;
+    padding-inline: 1rem;
+    background-color: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 5px;
+    backdrop-filter: var(--glass-backdrop-filter);
+
+    display: flex;
+    flex-direction: column;
+    align-items: end;
+}
+
+#block-menu h2 {
+    display: inline;
+    color: var(--fg-dark);
+    font-size: 1rem;
+    text-transform: uppercase;
+    margin: 0;
+    pointer-events: none;
+}
+
+#block-menu .block-category {
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+#block-menu .block {
+    border: 1px solid var(--glass-border);
+    border-radius: 3px;
+    margin-left: .4rem;
+    padding: .1rem;
+    position: relative;
+    display: inline;
+    width: 3rem;
+    height: 3rem;
+}
+
+#block-menu .block::after {
+    content: attr(data-name);
+    background: var(--glass-light);
+    border-radius: 3px;
+    border-top: 1px solid var(--glass-light-border);
+    backdrop-filter: var(--glass-backdrop-filter);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + .2rem);
+    transform: translate(-50%, 0);
+    transition: opacity var(--transition);
+    padding-top: .1rem;
+    padding-inline: .2rem;
+    font-size: .8rem;
+
+    opacity: 0;
+}
+
+#block-menu .block:hover::after {
+    opacity: 1;
+}
+
+#block-menu .block-canvas-container {
+    width: 100%;
+    height: 100%;
+}

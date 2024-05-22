@@ -4,7 +4,7 @@ import { RGB } from "./engine/colors.js";
 import { Plugins, Time, World } from "./engine/ecs.js";
 import { Camera2d, CameraTransform, Canvas, CanvasObject, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
 import { I18N, LANG } from "./lang.js";
-import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode } from "./blocks.js";
+import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode, IBlock } from "./blocks.js";
 import { blockMenuPlugin } from "./ui/block_menu.js";
 import { titleBarPlugin } from "./ui/title_bar.js";
 import { debugViewPlugin, perfData, timed } from "./ui/debug_view.js";
@@ -48,34 +48,40 @@ effectAndInit(settings.graphics.shaded_background, () => {
     }
 });
 
-export const blocks = {
+type BlockDef = {default: IBlock, center: Vec2, iconSize: number, name: keyof (typeof I18N)["en_us"]["BLOCKS"]}
+export const blocks: {gates: BlockDef[], io: BlockDef[]} = {
     gates: [
         {
             default: new And(),
             center: new Vec2(0),
-            icon_size: GRID_SIZE * 2 + 8,
+            iconSize: GRID_SIZE * 2 + 8,
+            name: "AND",
         },
         {
             default: new Or(),
             center: new Vec2(0),
-            icon_size: GRID_SIZE * 2 + 8,
+            iconSize: GRID_SIZE * 2 + 8,
+            name: "OR",
         },
         {
             default: new Xor(),
             center: new Vec2(0),
-            icon_size: GRID_SIZE * 2 + 8,
+            iconSize: GRID_SIZE * 2 + 8,
+            name: "XOR",
         }
     ],
     io: [
         {
             default: new Toggle(false),
             center: new Vec2(GRID_SIZE / 2, 0),
-            icon_size: GRID_SIZE * 1.5 + 8,
+            iconSize: GRID_SIZE * 1.5 + 8,
+            name: "TOGGLE",
         },
         {
             default: new LED(false),
             center: new Vec2(GRID_SIZE / 2, 0),
-            icon_size: GRID_SIZE * 1.5 + 8,
+            iconSize: GRID_SIZE * 1.5 + 8,
+            name: "LED",
         }
     ]
 }

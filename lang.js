@@ -39,7 +39,7 @@ export const I18N = {
             NOT: "NOT",
             NAND: "NAND",
             NOR: "NOR",
-            NXOR: "NXOR",
+            XNOR: "XNOR",
             TOGGLE: "Toggle",
             LED: "LED",
         }
@@ -79,12 +79,12 @@ export const I18N = {
         BLOCKS: {
             AND: "UND",
             OR: "ODER",
-            XOR: "X-ODER",
+            XOR: "EX. ODER",
             NOT: "NICHT",
-            NAND: "N-UND",
-            NOR: "N-ODER",
-            NXOR: "NX-ODER",
-            TOGGLE: "Toggle",
+            NAND: "NAND",
+            NOR: "NOR",
+            XNOR: "XNOR",
+            TOGGLE: "Schalter",
             LED: "LED",
         }
     },
@@ -127,7 +127,7 @@ export const I18N = {
             NOT: "NOT",
             NAND: "NAND",
             NOR: "NOR",
-            NXOR: "NXOR",
+            XNOR: "XNOR",
             TOGGLE: "Toggle",
             LED: "LED",
         }
