@@ -1,8 +1,9 @@
-import { GRID_SIZE, settings } from "./bsim.js";
+import { settings } from "./bsim.js";
+import { GRID_SIZE } from "./constants.js";
 import { Color, RGB, color_mix } from "./engine/colors.js";
-import { EntityWrapper, Plugins, World } from "./engine/ecs.js";
+import { Constructor, EntityWrapper, Plugins, World } from "./engine/ecs.js";
 import { Camera2d, CameraTransform, CanvasObject, SharedTranslate, Transform, Vec2 } from "./engine/engine.js";
-import { perfData } from "./ui/debug_view.js";
+import { I18N } from "./lang.js";
 
 const COLORS = {
     AND: new RGB(0x00, 0xf7, 0xff),
@@ -20,18 +21,37 @@ const COLORS = {
 const OUTLINE_WIDTH = 8;
 const OUTLINE_COLOR = (color: Color) => color_mix(0.5, color, new RGB(0,0,0));
 
-type Hitbox = {type: "circle", center: Vec2, radius: number} | {type: "rect", pos: Vec2, size: Vec2};
+export type Hitbox = {type: "circle", center: Vec2, radius: number} | {type: "rect", pos: Vec2, size: Vec2};
 type ClickListener = {hitbox: Hitbox, fn: (e: MouseEvent) => boolean};
 
+export type BlockDef = {
+    default: () => IBlock,
+    defaultInputs: () => NodeOrValue[],
+    center: Vec2,
+    iconSize: number,
+    name: keyof (typeof I18N)["en_us"]["BLOCKS"],
+    hitbox: Hitbox,
+};
 export interface IBlock {
     inputNodes: Vec2[];
     outputNodes: Vec2[];
     calculate(input: boolean[]): boolean[];
     render(ctx: CanvasRenderingContext2D): void;
     listeners: ClickListener[];
+    data: BlockDef;
 }
 
 export class And implements IBlock {
+    static staticData: BlockDef = {
+        default: () => new And(),
+        defaultInputs: () => [false, false],
+        center: new Vec2(0),
+        iconSize: GRID_SIZE * 2 + 8,
+        name: "AND",
+        hitbox: {type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2*GRID_SIZE)}
+    }
+    data = And.staticData;
+
     inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
@@ -75,6 +95,16 @@ export class And implements IBlock {
 }
 
 export class Or implements IBlock {
+    static staticData: BlockDef = {
+        default: () => new Or(),
+        defaultInputs: () => [false, false],
+        center: new Vec2(0),
+        iconSize: GRID_SIZE * 2 + 8,
+        name: "OR",
+        hitbox: {type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2*GRID_SIZE)}
+    }
+    data = Or.staticData;
+
     inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
@@ -120,6 +150,16 @@ export class Or implements IBlock {
 }
 
 export class Xor implements IBlock {
+    static staticData: BlockDef = {
+        default: () => new Xor(),
+        defaultInputs: () => [false, false],
+        center: new Vec2(0),
+        iconSize: GRID_SIZE * 2 + 8,
+        name: "XOR",
+        hitbox: {type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2*GRID_SIZE)}
+    }
+    data = Xor.staticData;
+
     inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
@@ -170,6 +210,16 @@ export class Xor implements IBlock {
 }
 
 export class Toggle implements IBlock {
+    static staticData: BlockDef = {
+        default: () => new Toggle(false),
+        defaultInputs: () => [],
+        center: new Vec2(GRID_SIZE / 2, 0),
+        iconSize: GRID_SIZE * 1.5 + 8,
+        name: "TOGGLE",
+        hitbox: {type: "rect", pos: new Vec2(0, -GRID_SIZE / 2), size: new Vec2(GRID_SIZE)}
+    }
+    data = Toggle.staticData;
+
     state: boolean;
     inputNodes: Vec2[] = [];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
@@ -208,6 +258,16 @@ export class Toggle implements IBlock {
 }
 
 export class LED implements IBlock {
+    static staticData: BlockDef = {
+        default: () => new LED(false),
+        defaultInputs: () => [false],
+        center: new Vec2(GRID_SIZE / 2, 0),
+        iconSize: GRID_SIZE * 1.5 + 8,
+        name: "LED",
+        hitbox: {type: "circle", center: new Vec2(GRID_SIZE / 2, 0), radius: GRID_SIZE}
+    }
+    data = LED.staticData;
+
     state: boolean;
     inputNodes: Vec2[] = [new Vec2(0, 0)];
     outputNodes: Vec2[] = [];
@@ -240,8 +300,8 @@ export class LED implements IBlock {
     }
 }
 
-type NodeRef = {block: Block, outputId: number};
-type NodeOrValue = NodeRef | boolean;
+export type NodeRef = {block: Block, outputId: number};
+export type NodeOrValue = NodeRef | boolean;
 export class Block {
     inputs: NodeOrValue[];
     output: boolean[] | null;
@@ -249,6 +309,8 @@ export class Block {
     outputNodes: [Vec2, OutputNode][];
     block: IBlock;
     pos: SharedTranslate;
+    inputNodeEntities: EntityWrapper<Constructor<InputNode | Transform | CameraTransform | CanvasObject>>[] = [];
+    outputNodeEntities: EntityWrapper<Constructor<OutputNode | Transform | CameraTransform | CanvasObject>>[] = [];
 
     constructor (inputs: NodeOrValue[], block: IBlock, pos: Vec2) {
         this.inputs = inputs;
@@ -265,7 +327,7 @@ export class Block {
         this.pos = new SharedTranslate(pos);
     }
 
-    getOutput(blocks: Block[]): boolean[] {
+    getOutput(): boolean[] {
         if (this.output !== null) {
             return this.output;
         }
@@ -275,7 +337,7 @@ export class Block {
             if (typeof input === "boolean") {
                 inputs.push(input);
             } else {
-                inputs.push(input.block.getOutput(blocks)[input.outputId]);
+                inputs.push(input.block.getOutput()[input.outputId]);
             }
         }
         this.output = this.block.calculate(inputs);
@@ -283,21 +345,31 @@ export class Block {
     }
 
     render(world: World, camera: Camera2d) {
-        const nodes = [];
         const transform = new Transform(new Vec2(0, 0), 0, new Vec2(1));
         this.pos.add(transform);
 
         for (const node of this.outputNodes) {
             const nodeTransform = new Transform(node[0], 0, new Vec2(1));
             this.pos.add(nodeTransform);
-            nodes.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
+            this.outputNodeEntities.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
         }
         for (const node of this.inputNodes) {
             const nodeTransform = new Transform(node[0], 0, new Vec2(1));
             this.pos.add(nodeTransform);
-            nodes.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
+            this.inputNodeEntities.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
         }
         world.spawn([this, transform, new CameraTransform(camera), new CanvasObject(ctx => this.block.render(ctx))]);
+    }
+
+    remove(world: World) {
+        const e = world.getEntities(Block).find(v => v(Block) === this) as EntityWrapper<typeof Block>;
+        for (const inputNode of e(Block).inputNodeEntities) {
+            inputNode.delete();
+        }
+        for (const outputNode of e(Block).outputNodeEntities) {
+            outputNode.delete();
+        }
+        e.delete();
     }
 }
 
@@ -385,19 +457,31 @@ export function circuitPlugin(world: World) {
     world.system(Loop, OutputNode, entities => {
         for (const e of entities) {
             const output = e(OutputNode);
-            output.state = output.ref.getOutput(world.getEntities(Block).map(e => e(Block)))[output.outputId] as boolean;
+            output.state = output.ref.getOutput()[output.outputId] as boolean;
         }
     });
     world.system(Loop, InputNode, entities => {
         for (const e of entities) {
             const input = e(InputNode);
-            input.ref.getOutput(world.getEntities(Block).map(e => e(Block)));
+            input.ref.getOutput();
             const inputVal = input.ref.inputs[input.inputId];
             if (typeof inputVal === "boolean") {
                 input.state = inputVal;
             } else {
-                input.state = inputVal.block.getOutput(world.getEntities(Block).map(e => e(Block)))[inputVal.outputId];
+                input.state = inputVal.block.getOutput()[inputVal.outputId];
             }
         }
     });
+}
+
+let currentId = 0;
+export class BlockID {
+    id: number;
+    constructor () {
+        this.id = currentId++;
+    }
+}
+
+export function getBlocks(world: World): Map<number, Block> {
+    return new Map(world.getEntities([BlockID, Block]).map(e => [e(BlockID).id, e(Block)]));
 }

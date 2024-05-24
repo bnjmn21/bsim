@@ -1,4 +1,5 @@
-import { GRID_SIZE, settings } from "./bsim.js";
+import { settings } from "./bsim.js";
+import { GRID_SIZE } from "./constants.js";
 import { RGB, color_mix } from "./engine/colors.js";
 import { Plugins } from "./engine/ecs.js";
 import { CameraTransform, CanvasObject, SharedTranslate, Transform, Vec2 } from "./engine/engine.js";
@@ -16,6 +17,15 @@ const COLORS = {
 const OUTLINE_WIDTH = 8;
 const OUTLINE_COLOR = (color) => color_mix(0.5, color, new RGB(0, 0, 0));
 export class And {
+    static staticData = {
+        default: () => new And(),
+        defaultInputs: () => [false, false],
+        center: new Vec2(0),
+        iconSize: GRID_SIZE * 2 + 8,
+        name: "AND",
+        hitbox: { type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2 * GRID_SIZE) }
+    };
+    data = And.staticData;
     inputNodes = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
@@ -57,6 +67,15 @@ export class And {
     }
 }
 export class Or {
+    static staticData = {
+        default: () => new Or(),
+        defaultInputs: () => [false, false],
+        center: new Vec2(0),
+        iconSize: GRID_SIZE * 2 + 8,
+        name: "OR",
+        hitbox: { type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2 * GRID_SIZE) }
+    };
+    data = Or.staticData;
     inputNodes = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
@@ -100,6 +119,15 @@ export class Or {
     }
 }
 export class Xor {
+    static staticData = {
+        default: () => new Xor(),
+        defaultInputs: () => [false, false],
+        center: new Vec2(0),
+        iconSize: GRID_SIZE * 2 + 8,
+        name: "XOR",
+        hitbox: { type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2 * GRID_SIZE) }
+    };
+    data = Xor.staticData;
     inputNodes = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
@@ -148,6 +176,15 @@ export class Xor {
     }
 }
 export class Toggle {
+    static staticData = {
+        default: () => new Toggle(false),
+        defaultInputs: () => [],
+        center: new Vec2(GRID_SIZE / 2, 0),
+        iconSize: GRID_SIZE * 1.5 + 8,
+        name: "TOGGLE",
+        hitbox: { type: "rect", pos: new Vec2(0, -GRID_SIZE / 2), size: new Vec2(GRID_SIZE) }
+    };
+    data = Toggle.staticData;
     state;
     inputNodes = [];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
@@ -183,6 +220,15 @@ export class Toggle {
     }
 }
 export class LED {
+    static staticData = {
+        default: () => new LED(false),
+        defaultInputs: () => [false],
+        center: new Vec2(GRID_SIZE / 2, 0),
+        iconSize: GRID_SIZE * 1.5 + 8,
+        name: "LED",
+        hitbox: { type: "circle", center: new Vec2(GRID_SIZE / 2, 0), radius: GRID_SIZE }
+    };
+    data = LED.staticData;
     state;
     inputNodes = [new Vec2(0, 0)];
     outputNodes = [];
@@ -219,6 +265,8 @@ export class Block {
     outputNodes;
     block;
     pos;
+    inputNodeEntities = [];
+    outputNodeEntities = [];
     constructor(inputs, block, pos) {
         this.inputs = inputs;
         this.output = null;
@@ -233,7 +281,7 @@ export class Block {
         }
         this.pos = new SharedTranslate(pos);
     }
-    getOutput(blocks) {
+    getOutput() {
         if (this.output !== null) {
             return this.output;
         }
@@ -243,27 +291,36 @@ export class Block {
                 inputs.push(input);
             }
             else {
-                inputs.push(input.block.getOutput(blocks)[input.outputId]);
+                inputs.push(input.block.getOutput()[input.outputId]);
             }
         }
         this.output = this.block.calculate(inputs);
         return this.output;
     }
     render(world, camera) {
-        const nodes = [];
         const transform = new Transform(new Vec2(0, 0), 0, new Vec2(1));
         this.pos.add(transform);
         for (const node of this.outputNodes) {
             const nodeTransform = new Transform(node[0], 0, new Vec2(1));
             this.pos.add(nodeTransform);
-            nodes.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
+            this.outputNodeEntities.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
         }
         for (const node of this.inputNodes) {
             const nodeTransform = new Transform(node[0], 0, new Vec2(1));
             this.pos.add(nodeTransform);
-            nodes.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
+            this.inputNodeEntities.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
         }
         world.spawn([this, transform, new CameraTransform(camera), new CanvasObject(ctx => this.block.render(ctx))]);
+    }
+    remove(world) {
+        const e = world.getEntities(Block).find(v => v(Block) === this);
+        for (const inputNode of e(Block).inputNodeEntities) {
+            inputNode.delete();
+        }
+        for (const outputNode of e(Block).outputNodeEntities) {
+            outputNode.delete();
+        }
+        e.delete();
     }
 }
 export class BlockRef {
@@ -342,20 +399,30 @@ export function circuitPlugin(world) {
     world.system(Loop, OutputNode, entities => {
         for (const e of entities) {
             const output = e(OutputNode);
-            output.state = output.ref.getOutput(world.getEntities(Block).map(e => e(Block)))[output.outputId];
+            output.state = output.ref.getOutput()[output.outputId];
         }
     });
     world.system(Loop, InputNode, entities => {
         for (const e of entities) {
             const input = e(InputNode);
-            input.ref.getOutput(world.getEntities(Block).map(e => e(Block)));
+            input.ref.getOutput();
             const inputVal = input.ref.inputs[input.inputId];
             if (typeof inputVal === "boolean") {
                 input.state = inputVal;
             }
             else {
-                input.state = inputVal.block.getOutput(world.getEntities(Block).map(e => e(Block)))[inputVal.outputId];
+                input.state = inputVal.block.getOutput()[inputVal.outputId];
             }
         }
     });
+}
+let currentId = 0;
+export class BlockID {
+    id;
+    constructor() {
+        this.id = currentId++;
+    }
+}
+export function getBlocks(world) {
+    return new Map(world.getEntities([BlockID, Block]).map(e => [e(BlockID).id, e(Block)]));
 }

@@ -1,5 +1,12 @@
 import { Plugins } from "./ecs.js";
 // --- MATH ---
+/**
+ * Represents a 2D vector
+ *
+ * ## Notes
+ * - `mul` and `mulAssign` perform axis-wise multiplication (e.g. a.x * b.x, a.y * b.y) and not the dot product or something like that.
+ * - The constructor can also just take one argument in which case x and y are set to that value.
+ */
 export class Vec2 {
     x;
     y;
@@ -31,6 +38,10 @@ export class Vec2 {
     mul(rhs) {
         return new Vec2(this.x * rhs.x, this.y * rhs.y);
     }
+    mulAssign(rhs) {
+        this.x *= rhs.x;
+        this.y *= rhs.y;
+    }
     div(rhs) {
         return new Vec2(this.x / rhs.x, this.y / rhs.y);
     }
@@ -45,6 +56,14 @@ export class Vec2 {
     }
     area() {
         return this.x * this.y;
+    }
+    transform(t) {
+        return new Vec2((this.x * t[0][0]) + (this.y * t[0][1]), (this.x * t[1][0]) + (this.y * t[1][1]));
+    }
+    transformAssign(t) {
+        const transformed = this.transform(t);
+        this.x = transformed.x;
+        this.y = transformed.y;
     }
 }
 ;
@@ -96,6 +115,9 @@ export class Camera2d {
         this.scale = initalScale;
         this.mousePos = new Vec2(0);
         this.rawScale = 1;
+        addEventListener("mousemove", e => {
+            this.mousePos = new Vec2(e.clientX, e.clientY);
+        });
     }
     enableCanvasMouseControls(htmlObject, translateMouseButton, enableScrollZoom) {
         let mouseTarget = null;
@@ -113,9 +135,6 @@ export class Camera2d {
             });
         }
         if (enableScrollZoom) {
-            htmlObject.addEventListener("mousemove", e => {
-                this.mousePos = new Vec2(e.clientX, e.clientY);
-            });
             htmlObject.addEventListener("wheel", e => {
                 const scrollAmt = e.deltaY == 0 ? 0 : (e.deltaY < 0 ? -1 : 1);
                 if (this.scale.x < 0.05 && scrollAmt == -1)
@@ -228,6 +247,18 @@ export class Transform {
                 ctx.scale(v.value.x, v.value.y);
         });
     }
+    applyToVec(vec) {
+        let current = vec.clone();
+        this.transformations.forEach(v => {
+            if (v.type === "translate")
+                current.addAssign(v.value);
+            if (v.type === "rotate")
+                current.transformAssign([[Math.cos(v.value), -Math.sin(v.value)], [Math.sin(v.value), Math.cos(v.value)]]); //idk if this is correct
+            if (v.type === "scale")
+                current.mulAssign(v.value);
+        });
+        return current;
+    }
 }
 export class SharedTranslate {
     transforms = [];
@@ -242,7 +273,7 @@ export class SharedTranslate {
         }
     }
     add(transform) {
-        transform.translate(this.pos);
+        this.transforms.push([transform, transform.translate(this.pos)]);
     }
 }
 export class CameraTransform {

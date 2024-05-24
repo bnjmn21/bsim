@@ -58,7 +58,6 @@ body {
     font-weight: 400;
     font-style: normal;
     overflow: hidden;
-    font-display: swap;
 }
 
 #main-canvas {
@@ -123,4 +122,24 @@ body {
     width: 100vw;
     pointer-events: none;
     opacity: 0;
+}
+
+#mouse-tooltip-container {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+#mouse-tooltip-container .mouse-tooltip {
+    position: absolute;
+    background-color: var(--glass-light);
+    border: 1px solid var(--glass-light-border);
+    border-radius: 3px;
+    backdrop-filter: var(--glass-backdrop-filter);
+    transform: translate(-50%, 0);
+    top: 25px;
+}
+
+#mouse-tooltip-container .delete {
+    font-size: 3rem;
 }

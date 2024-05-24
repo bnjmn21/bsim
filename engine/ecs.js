@@ -51,7 +51,9 @@ export class World {
         for (let [registryComponents, entities] of this.entityRegistries) {
             if (containsAll(registryComponents, flatComponents)) {
                 for (let entity of entities) {
-                    totalEntities.push(createEntityWrapper(entity, entities));
+                    if (entity) {
+                        totalEntities.push(createEntityWrapper(entity, entities));
+                    }
                 }
             }
         }
@@ -73,7 +75,7 @@ export class World {
         else {
             componentMapGetExact(this.entityRegistries, componentTypes).push(flatComponents);
         }
-        return createEntityWrapper(flatComponents, this.entityRegistries.get(componentTypes));
+        return createEntityWrapper(flatComponents, componentMapGetExact(this.entityRegistries, componentTypes));
     }
     schedule() {
         const reference = this.scheduleRegistry.push(null, () => ({}));

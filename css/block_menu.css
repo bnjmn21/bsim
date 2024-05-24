@@ -46,7 +46,7 @@
     content: attr(data-name);
     background: var(--glass-light);
     border-radius: 3px;
-    border-top: 1px solid var(--glass-light-border);
+    border: 1px solid var(--glass-light-border);
     backdrop-filter: var(--glass-backdrop-filter);
     position: absolute;
     left: 50%;

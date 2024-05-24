@@ -10,6 +10,7 @@ export const perfData = {
         nodes: 0,
         wires: 0,
         blocks: 0,
+        other: 0,
     },
 
     idle: 0,
@@ -43,6 +44,7 @@ export function debugViewPlugin(world: World) {
         perfData.render.nodes = 0;
         perfData.render.wires = 0;
         perfData.render.blocks = 0;
+        perfData.render.other = 0;
     });
     world.system(AfterLoop, _ => {
         const ctx = overlayCanvas.context2d;
@@ -73,7 +75,7 @@ export function debugViewPlugin(world: World) {
             const total = time.ms() - perfData.last_frame_start;
             perfData.idle = time.ms() - perfData.last_idle_start;
 
-            perfData.render.total = perfData.render.bg + perfData.render.nodes + perfData.render.wires + perfData.render.blocks;
+            perfData.render.total = perfData.render.bg + perfData.render.nodes + perfData.render.wires + perfData.render.blocks + perfData.render.other;
 
             perfData.other = total - (perfData.render.total);
             pieGraph.center = overlayCanvas.size().sub(new Vec2(200));
@@ -89,6 +91,7 @@ export function debugViewPlugin(world: World) {
                 pieces.push({name: "nodes", style: "#00ffff", val: perfData.render.nodes});
                 pieces.push({name: "wires", style: "#ffff00", val: perfData.render.wires});
                 pieces.push({name: "blocks", style: "#0000ff", val: perfData.render.blocks});
+                pieces.push({name: "other", style: "#00ff00", val: perfData.render.other});
             }
             pieGraph.render(pieces);
             ctx.fillStyle = "#ffffff";
