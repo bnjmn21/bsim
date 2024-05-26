@@ -43,7 +43,7 @@ export function loadSettings(): Settings {
                 gate_symbols: signals.value<"ansi"|"iec">("ansi"),
             },
             advanced: {
-                debug_display: signals.value(true),
+                debug_display: signals.value(false),
                 perf_graph: signals.value(false),
             }
         }
