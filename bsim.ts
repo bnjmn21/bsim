@@ -1,10 +1,8 @@
 import { Signal, directEffect, signals } from "./jsml/signals.js";
-import { Gradient } from "./engine/gradient.js";
-import { RGB } from "./engine/colors.js";
 import { Plugins, Time, World } from "./engine/ecs.js";
 import { Camera2d, CameraTransform, Canvas, CanvasObject, SharedTranslate, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
 import { I18N, LANG } from "./lang.js";
-import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode, IBlock, NodeOrValue, BlockDef, Hitbox, getBlocks, NodeRef } from "./blocks.js";
+import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode, IBlock, NodeOrValue, BlockDef, Hitbox, getBlocks, NodeRef, InputNodeRef, Delay, WireNode, Not } from "./blocks.js";
 import { blockMenuPlugin } from "./ui/block_menu.js";
 import { titleBarPlugin } from "./ui/title_bar.js";
 import { debugViewPlugin, perfData, timed } from "./ui/debug_view.js";
@@ -12,22 +10,11 @@ import { settingsPlugin } from "./ui/settings.js";
 import { GRID_SIZE } from "./constants.js";
 import { JSML } from "./jsml/jsml.js";
 import { garbage } from "./icons.js";
+import { keyboardTipsPlugin } from "./ui/keyboard_tips.js";
+import { controlsPlugin } from "./ui/controls.js";
+import { loadSettings } from "./persistency.js";
 
-let firstFrame = true;
-let resizedLastFrame = false;
-let framesSinceResize = 0;
-
-export const settings = {
-    graphics: {
-        blur: signals.value<"off"|"low"|"high">("low"),
-        shaded_background: signals.value(false),
-        gate_symbols: signals.value<"ansi"|"iec">("ansi"),
-    },
-    advanced: {
-        debug_display: signals.value(true),
-        perf_graph: signals.value(false),
-    }
-};
+export const settings = loadSettings();
 effectAndInit(settings.graphics.blur, () => {
     if (settings.graphics.blur.get() === "off") {
         document.body.classList.remove("blur-low");
@@ -40,24 +27,21 @@ effectAndInit(settings.graphics.blur, () => {
         document.body.classList.remove("blur-low");
     }
 });
-effectAndInit(settings.graphics.shaded_background, () => {
-    if (settings.graphics.shaded_background.get()) {
-        document.body.classList.remove("simple-background");
-        resizedLastFrame = true;
-    } else {
-        document.body.classList.add("simple-background");
-    }
-});
 export type BlockType = {staticData: BlockDef};
-export const blocks: {gates: BlockType[], io: BlockType[]} = {
+export const blocks: {gates: BlockType[], io: BlockType[], misc: BlockType[]} = {
     gates: [
         And,
         Or,
         Xor,
+        Not
     ],
     io: [
         Toggle,
         LED,
+    ],
+    misc: [
+        Delay,
+        WireNode,
     ]
 }
 
@@ -75,8 +59,20 @@ export const dragging: {inner: DraggingNewBlock | MovingBlock | DraggingWire | n
 
 export const mouseTooltip = signals.value<null | "delete">(null);
 
+export const keys = {
+    shift: signals.value(false),
+    ctrl: signals.value(false),
+    alt: signals.value(false),
+    meta: signals.value(false),
+}
+
+export const controlState = {
+    playing: signals.value(false),
+    speed: signals.value(1),
+}
+
 export function bsim(world: World) {
-    const { time, Loop, AfterLoop } = world.plugin(Plugins.time);
+    const { time, Loop } = world.plugin(Plugins.time);
 
     world.system(Loop, () => {
        overlayCanvas.context2d.clearRect(0, 0, overlayCanvas.size().x, overlayCanvas.size().y);
@@ -88,9 +84,31 @@ export function bsim(world: World) {
     world.plugin(blockMenuPlugin);
     world.plugin(titleBarPlugin);
     world.plugin(settingsPlugin);
+    world.plugin(keyboardTipsPlugin);
+    world.plugin(controlsPlugin);
 
-    addEventListener("resize", _ => {
-        resizedLastFrame = true;
+    addEventListener("keydown", e => {
+        if (e.key === "Control") {
+            keys.ctrl.set(true);
+        } else if (e.key === "Shift") {
+            keys.shift.set(true);
+        } else if (e.key === "Alt") {
+            keys.alt.set(true);
+        } else if (e.key === "Meta") {
+            keys.meta.set(true);
+        }
+    });
+
+    addEventListener("keyup", e => {
+        if (e.key === "Control") {
+            keys.ctrl.set(false);
+        } else if (e.key === "Shift") {
+            keys.shift.set(false);
+        } else if (e.key === "Alt") {
+            keys.alt.set(false);
+        } else if (e.key === "Meta") {
+            keys.meta.set(false);
+        }
     });
 
     addEventListener("mousemove", e => {
@@ -105,18 +123,41 @@ export function bsim(world: World) {
     });
 
     canvas.canvas.addEventListener("mousedown", e => {
-        if (e.button === 2) {
-            const outputNodes = world.getEntities([OutputNode, Transform]).map<[OutputNode, Transform]>(v => [v(OutputNode), v(Transform)]);
-            for (const node of outputNodes) {
-                const startPos = node[0].ref.pos.pos.add(
-                    node[0].ref.block.outputNodes[node[0].outputId]
-                );
-                if (circleHitbox(startPos, GRID_SIZE / 4, camera.mouseWorldCoords())) {
-                    dragging.inner = {
-                        type: "wire",
-                        from: {block: node[0].ref, outputId: node[0].outputId},
+        if (e.button === 0) {
+            if (keys.alt.get() && (!(keys.ctrl.get() || keys.meta.get()))) {
+                const inputNodes = world.getEntities(InputNode).map<InputNode>(v => v(InputNode));
+                for (const node of inputNodes) {
+                    if (typeof node.ref.inputs[node.inputId] !== "boolean") {
+                        const nodePos = node.ref.pos.pos.add(
+                            node.ref.block.inputNodes[node.inputId]
+                        );
+                        if (circleHitbox(nodePos, GRID_SIZE / 2, camera.mouseWorldCoords())) {
+                            dragging.inner = {
+                                type: "wire",
+                                from: {block: (node.ref.inputs[node.inputId] as NodeRef).block, outputId: (node.ref.inputs[node.inputId] as NodeRef).outputId},
+                            }
+                            node.ref.inputs[node.inputId] = false;
+                            recalculate(world);
+                            return;
+                        }
                     }
-                    return;
+                }
+                return;
+            }
+
+            if (!(keys.ctrl.get() || keys.meta.get())) {
+                const outputNodes = world.getEntities([OutputNode, Transform]).map<[OutputNode, Transform]>(v => [v(OutputNode), v(Transform)]);
+                for (const node of outputNodes) {
+                    const startPos = node[0].ref.pos.pos.add(
+                        node[0].ref.block.outputNodes[node[0].outputId]
+                    );
+                    if (circleHitbox(startPos, GRID_SIZE / 2, camera.mouseWorldCoords())) {
+                        dragging.inner = {
+                            type: "wire",
+                            from: {block: node[0].ref, outputId: node[0].outputId},
+                        }
+                        return;
+                    }
                 }
             }
 
@@ -147,7 +188,7 @@ export function bsim(world: World) {
                 dragging.inner = null;
             }
         }
-        if (dragging.inner?.type === "move") {
+        if (dragging.inner?.type === "move" && e.button === 0) {
             if (e.target === canvas.canvas) {
                 dragging.inner = null;
                 return;
@@ -166,14 +207,26 @@ export function bsim(world: World) {
             dragging.inner.block.remove(world);
             dragging.inner = null;
         }
-        if (dragging.inner?.type === "wire") {
+        if (dragging.inner?.type === "wire" && e.button === 0) {
             const inputNodes = world.getEntities(InputNode).map<InputNode>(v => v(InputNode));
             for (const node of inputNodes) {
                 const startPos = node.ref.pos.pos.add(
                     node.ref.block.inputNodes[node.inputId]
                 );
-                if (circleHitbox(startPos, GRID_SIZE / 4, camera.mouseWorldCoords())) {
+                if (circleHitbox(startPos, GRID_SIZE / 2, camera.mouseWorldCoords())) {
+                    const oldInput = node.ref.inputs[node.inputId];
                     node.ref.inputs[node.inputId] = dragging.inner.from;
+                    if (recalculateAndCheckForLoops(world)) {
+                        (document.getElementById("loop-created-container") as HTMLElement).animate([
+                            {
+                                opacity: 1,
+                            },
+                            {
+                                opacity: 0,
+                            }
+                        ], 4000);
+                        node.ref.inputs[node.inputId] = oldInput;
+                    };
                     recalculate(world);
                     break;
                 }
@@ -188,6 +241,7 @@ export function bsim(world: World) {
     overlayCanvas.autoFitToParent();
 
     canvas.canvas.addEventListener("click", event => {
+        if (keys.ctrl.get() || keys.meta.get()) return;
         const clickPos = new Vec2(event.clientX, event.clientY);
         for (const e of world.getEntities(Block)) {
             for (const listener of e(Block).block.listeners) {
@@ -216,88 +270,12 @@ export function bsim(world: World) {
         }
     });
 
-    const backgroundGradient = new Gradient(Gradient.GRADIENTS.RADIAL(size => size.div(new Vec2(2))));
-    backgroundGradient.startColor(new RGB(0x20, 0x20, 0x20));
-    backgroundGradient.colorStopLinear(new RGB(0x10, 0x10, 0x10), 1);
-
     const camera = new Camera2d(canvas.size().div(new Vec2(2)).invert(), new Vec2(1));
-    camera.enableCanvasMouseControls(canvas.canvas, 1, true);
-    
-    //const toggle0 = new Block([], new Toggle(false), new Vec2(0, 0));
-    //toggle0.getOutput();
-    //toggle0.render(world, camera);
-//
-    //const toggle1 = new Block([], new Toggle(false), new Vec2(0, GRID_SIZE * 2));
-    //toggle1.getOutput();
-    //toggle1.render(world, camera);
-//
-    //const toggle2 = new Block([], new Toggle(false), new Vec2(GRID_SIZE * 4, GRID_SIZE * -1));
-    //toggle2.getOutput();
-    //toggle2.render(world, camera);
-//
-    //const xorGate = new Block([
-    //    {block: toggle0, outputId: 0}, {block: toggle1, outputId: 0}
-    //], new Xor(), new Vec2(GRID_SIZE * 4, GRID_SIZE));
-    //xorGate.getOutput();
-    //xorGate.render(world, camera);
-//
-    //const xorGate1 = new Block([
-    //    {block: toggle2, outputId: 0}, {block: xorGate, outputId: 0}
-    //], new Xor(), new Vec2(GRID_SIZE * 8, 0));
-    //xorGate1.getOutput();
-    //xorGate1.render(world, camera);
-//
-    //const andGate = new Block([
-    //    {block: toggle0, outputId: 0}, {block: toggle1, outputId: 0}
-    //], new And(), new Vec2(GRID_SIZE * 4, GRID_SIZE * 5));
-    //andGate.getOutput();
-    //andGate.render(world, camera);
-//
-    //const andGate1 = new Block([
-    //    {block: toggle2, outputId: 0}, {block: xorGate, outputId: 0}
-    //], new And(), new Vec2(GRID_SIZE * 8, GRID_SIZE * 3));
-    //andGate1.getOutput();
-    //andGate1.render(world, camera);
-//
-    //const orGate = new Block([
-    //    {block: andGate1, outputId: 0}, {block: andGate, outputId: 0}
-    //], new Or(), new Vec2(GRID_SIZE * 11, GRID_SIZE * 4));
-    //orGate.getOutput();
-    //orGate.render(world, camera);
-//
-    //const led = new Block([
-    //    {block: xorGate1, outputId: 0}
-    //], new LED(false), new Vec2(GRID_SIZE * 14, 0));
-    //led.getOutput();
-    //led.render(world, camera);
-//
-    //const led1 = new Block([
-    //    {block: orGate, outputId: 0}
-    //], new LED(false), new Vec2(GRID_SIZE * 14, GRID_SIZE * 2));
-    //led1.getOutput();
-    //led1.render(world, camera);
+    camera.enableCanvasMouseControls(canvas.canvas, 2, true);
 
     world.system(Loop, _ => {
-        if (resizedLastFrame) {
-            framesSinceResize = 0;
-        }
         perfData.render.bg = timed(time, () => {
-            if (framesSinceResize === 2 || firstFrame) {
-                if (settings.graphics.shaded_background.get()) {
-                    canvasBackground = canvas.context2d.createImageData(canvas.size().x, canvas.size().y);
-                    backgroundGradient.renderTo(canvasBackground);
-                }
-            }
-
-            firstFrame = false;
-            resizedLastFrame = false;
-            framesSinceResize++;
-    
-            if (settings.graphics.shaded_background.get()) {
-                canvas.context2d.putImageData(canvasBackground, 0, 0);
-            } else {
-                canvas.context2d.clearRect(0, 0, canvas.size().x, canvas.size().y);
-            }
+            canvas.context2d.clearRect(0, 0, canvas.size().x, canvas.size().y);
             drawGrid(camera, canvas);
         })[0];
     });
@@ -381,7 +359,9 @@ export function bsim(world: World) {
                 ctx.save();
                 camera.toTransform().applyTransforms(ctx);
                 ctx.translate(dragging.inner.pos.x, dragging.inner.pos.y);
-                if (dragging.inner.block) {
+                if (dragging.inner.block.menuRender) {
+                    dragging.inner.block.menuRender(ctx);
+                } else {
                     dragging.inner.block.default().render(ctx);
                 }
                 ctx.restore();
@@ -397,7 +377,7 @@ export function bsim(world: World) {
                     const startPos = node[0].ref.pos.pos.add(
                         node[0].ref.block.inputNodes[node[0].inputId]
                     );
-                    if (circleHitbox(startPos, GRID_SIZE / 4, camera.mouseWorldCoords())) {
+                    if (circleHitbox(startPos, GRID_SIZE / 2, camera.mouseWorldCoords())) {
                         connect = true;
                     }
                 }
@@ -407,14 +387,14 @@ export function bsim(world: World) {
                 camera.toTransform().applyTransforms(ctx);
                 if (connect) {
                     ctx.strokeStyle = "#3f3fff";
-                    ctx.setLineDash([55, 20]);
-                    ctx.lineWidth = 20;
+                    //ctx.setLineDash([55, 20]);
+                    ctx.lineWidth = GRID_SIZE / 2;
                 } else {
                     ctx.strokeStyle = "#ffffff7f";
-                    ctx.setLineDash([45, 30]);
-                    ctx.lineWidth = 15;
+                    //ctx.setLineDash([45, 30]);
+                    ctx.lineWidth = GRID_SIZE / 3;
                 }
-                ctx.lineCap = "butt";
+                ctx.lineCap = "round";
                 ctx.beginPath();
                 const startPos = dragging.inner.from.block.pos.pos.add(
                     dragging.inner.from.block.block.outputNodes[dragging.inner.from.outputId]
@@ -452,6 +432,38 @@ export function bsim(world: World) {
                 .class("delete")
                 .class("icon");
         }
+    });
+
+    const loopCreatedUi = new JSML(document.getElementById("loop-created-container") as HTMLElement);
+    loopCreatedUi.ui(ui => {
+        ui.div(ui => {
+            ui.p(ui => ui.text(I18N[LANG.get()].LOOP_CREATED.MAIN)).class("loop-created-text");
+            ui.p(ui => {
+                ui.text(I18N[LANG.get()].LOOP_CREATED.FIX_MESSAGE_0);
+                ui.tag("b", ui => ui.text(I18N[LANG.get()].LOOP_CREATED.FIX_MESSAGE_1)).class("special");
+                ui.text(I18N[LANG.get()].LOOP_CREATED.FIX_MESSAGE_2);
+            }).class("loop-created-text");
+        })
+            .class("loop-created");
+    });
+
+
+    let timeSinceTick = 0;
+    world.system(Loop, _ => {
+        perfData.simulation += timed(time, () => {
+            if (controlState.playing.get()) {
+                let ticked = false;
+                timeSinceTick = Math.min(timeSinceTick, controlState.speed.get() * 20);
+                for (let i = 1 / controlState.speed.get(); i < timeSinceTick; i += (1 / controlState.speed.get())) {
+                    tick(world);
+                    ticked = true;
+                }
+                if (ticked) {
+                    timeSinceTick = 0;
+                }
+                timeSinceTick += time.deltaS();
+            }
+        })[0];
     });
 }
 
@@ -521,4 +533,25 @@ function recalculate(world: World) {
     for (const block of world.getEntities(Block)) {
         block(Block).getOutput();
     }
+}
+
+/**
+ * Tries to recalculate the circuit.
+ * If there are any loops, the function quits and returns true.
+ */
+function recalculateAndCheckForLoops(world: World) {
+    for (const block of world.getEntities(Block)) {
+        block(Block).output = null;
+    }
+    for (const block of world.getEntities(Block)) {
+        if (block(Block).getOutputWithLoopCheck() === null) return true;
+    }
+    return false;
+}
+
+function tick(world: World) {
+    for (const block of world.getEntities(Block)) {
+        block(Block).tick();
+    }
+    recalculate(world);
 }

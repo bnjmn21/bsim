@@ -31,6 +31,7 @@ export const I18N = {
         CATEGORIES: {
             GATES: "Gates",
             IO: "I/O",
+            MISC: "Miscellaneous",
         },
         BLOCKS: {
             AND: "AND",
@@ -42,6 +43,25 @@ export const I18N = {
             XNOR: "XNOR",
             TOGGLE: "Toggle",
             LED: "LED",
+            DELAY: "Delay",
+            NODE: "Node",
+        },
+        LOOP_CREATED: {
+            MAIN: "This is a loop!",
+            FIX_MESSAGE_0: "Break up loops with ",
+            FIX_MESSAGE_1: "delay blocks",
+            FIX_MESSAGE_2: ".",
+        },
+        KEYBOARD: {
+            CTRL_PC: "CTRL",
+            CTRL_MAC: "⌘",
+            ALT_PC: "ALT",
+            ALT_MAC: "⌥",
+            SHIFT: "SHIFT",
+        },
+        TIPS: {
+            MOVE_NODE: "Move nodes",
+            DISCONNECT: "Disconnect cables from inputs",
         }
     },
     de_de: {
@@ -75,6 +95,7 @@ export const I18N = {
         CATEGORIES: {
             GATES: "Gatter",
             IO: "I/O",
+            MISC: "Anderes",
         },
         BLOCKS: {
             AND: "UND",
@@ -86,50 +107,25 @@ export const I18N = {
             XNOR: "XNOR",
             TOGGLE: "Schalter",
             LED: "LED",
-        }
-    },
-    la_ro: {
-        NAME: "BSim",
-        UNNAMED_CIRCUIT: "Machina anonyma",
-        LANGS: {
-            EN_US: "??? (Terra ignota)",
-            DE_DE: "??? (Germania)",
-            LA_RO: "Latina (S.P.Q.R.)",
+            DELAY: "Verzögerung",
+            NODE: "Knoten",
         },
-        SETTINGS: {
-            TITLE: "Selectio",
-            LANGUAGE: "Lingua",
-            GRAPHICS: "Forma",
-            BLUR: "Obscurae formae",
-            BACKGROUND: "Recessus",
-            BACKGROUND_FLAT: "Planus",
-            BACKGROUND_SHADED: "Colos",
-            GATE_SYMBOLS: "la_ro/SETTINGS/GATE_SYMBOLS",
-            GATE_SYMBOLS_ANSI: "ANSI (Terra ignota)",
-            GATE_SYMBOLS_IEC: "IEC (???)",
-            ADVANCED: "plus",
-            DEBUG_DISPLAY: "Informatio",
-            PERF_GRAPH: "la_ro/SETTINGS/PERF_GRAPH",
-            HIGH: "Altus",
-            LOW: "Brevis",
-            OFF: "Nihil",
-            SHOW: "Demonstrare",
-            HIDE: "Occultare",
+        LOOP_CREATED: {
+            MAIN: "Das ist eine Rückkopplung!",
+            FIX_MESSAGE_0: "Nutze ",
+            FIX_MESSAGE_1: "Verzögerungsblöcke",
+            FIX_MESSAGE_2: " um sie zu verhindern.",
         },
-        CATEGORIES: {
-            GATES: "Gates",
-            IO: "I/O",
+        KEYBOARD: {
+            CTRL_PC: "STRG",
+            CTRL_MAC: "⌘",
+            ALT_PC: "ALT",
+            ALT_MAC: "⌥",
+            SHIFT: "SHIFT",
         },
-        BLOCKS: {
-            AND: "AND",
-            OR: "OR",
-            XOR: "XOR",
-            NOT: "NOT",
-            NAND: "NAND",
-            NOR: "NOR",
-            XNOR: "XNOR",
-            TOGGLE: "Toggle",
-            LED: "LED",
+        TIPS: {
+            MOVE_NODE: "Knoten verschieben",
+            DISCONNECT: "Kabel von Eingängen trennen",
         }
     }
 };

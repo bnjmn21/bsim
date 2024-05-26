@@ -2,13 +2,14 @@ import { settings } from "./bsim.js";
 import { GRID_SIZE } from "./constants.js";
 import { Color, RGB, color_mix } from "./engine/colors.js";
 import { Constructor, EntityWrapper, Plugins, World } from "./engine/ecs.js";
-import { Camera2d, CameraTransform, CanvasObject, SharedTranslate, Transform, Vec2 } from "./engine/engine.js";
+import { Camera2d, CameraTransform, CanvasObject, SharedTranslate, Transform, Vec2, lerp } from "./engine/engine.js";
 import { I18N } from "./lang.js";
 
 const COLORS = {
     AND: new RGB(0x00, 0xf7, 0xff),
     OR: new RGB(0xeb, 0xff, 0x00),
     XOR: new RGB(0xd0, 0x00, 0xff),
+    NOT: new RGB(209, 64, 19),
 
     ON: new RGB(0xff, 0x00, 0x00),
     OFF: new RGB(0x7f, 0x7f, 0x7f),
@@ -16,7 +17,9 @@ const COLORS = {
     LED: {
         ON: new RGB(0xff, 0x00, 0x00),
         OFF: new RGB(0x7f, 0x7f, 0x7f),
-    }
+    },
+
+    DELAY: new RGB(0xeb, 0xff, 0x00),
 }
 const OUTLINE_WIDTH = 8;
 const OUTLINE_COLOR = (color: Color) => color_mix(0.5, color, new RGB(0,0,0));
@@ -27,6 +30,7 @@ type ClickListener = {hitbox: Hitbox, fn: (e: MouseEvent) => boolean};
 export type BlockDef = {
     default: () => IBlock,
     defaultInputs: () => NodeOrValue[],
+    menuRender?: (ctx: CanvasRenderingContext2D) => void;
     center: Vec2,
     iconSize: number,
     name: keyof (typeof I18N)["en_us"]["BLOCKS"],
@@ -37,7 +41,10 @@ export interface IBlock {
     outputNodes: Vec2[];
     calculate(input: boolean[]): boolean[];
     render(ctx: CanvasRenderingContext2D): void;
+    tick(input: boolean[]): void;
     listeners: ClickListener[];
+    ioDeps: number[];
+
     data: BlockDef;
 }
 
@@ -55,9 +62,12 @@ export class And implements IBlock {
     inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
+    ioDeps: number[] = [0, 1];
     calculate(input: boolean[]): boolean[] {
         return [input.every(v => v)];
     }
+
+    tick(): void {}
 
     render(ctx: CanvasRenderingContext2D) {
         ctx.lineCap = "butt";
@@ -108,9 +118,12 @@ export class Or implements IBlock {
     inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
+    ioDeps: number[] = [0, 1];
     calculate(input: boolean[]): boolean[] {
         return [input.some(v => v)];
     }
+
+    tick(): void {}
 
     render(ctx: CanvasRenderingContext2D): void {
         ctx.lineCap = "butt";
@@ -163,9 +176,12 @@ export class Xor implements IBlock {
     inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes: Vec2[] = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
+    ioDeps: number[] = [0, 1];
     calculate(input: boolean[]): boolean[] {
         return [input.filter(v => v).length % 2 === 1]
     }
+
+    tick(): void {}
 
     render(ctx: CanvasRenderingContext2D): void {
         ctx.lineCap = "butt";
@@ -209,6 +225,45 @@ export class Xor implements IBlock {
     }
 }
 
+export class Not implements IBlock {
+    static staticData: BlockDef = {
+        default: () => new Not(),
+        defaultInputs: () => [false],
+        center: new Vec2(-GRID_SIZE / 2, 0),
+        iconSize: GRID_SIZE * 1.5,
+        name: "NOT",
+        hitbox: {type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2*GRID_SIZE)}
+    }
+    data = And.staticData;
+
+    inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, 0)];
+    outputNodes: Vec2[] = [new Vec2(0, 0)];
+    listeners = [];
+    ioDeps: number[] = [0];
+
+    calculate(input: boolean[]): boolean[] {
+        return [!input[0]];
+    }
+
+    tick(input: boolean[]): void {}
+
+    render(ctx: CanvasRenderingContext2D) {
+        ctx.lineCap = "butt";
+        ctx.lineJoin = "miter";
+        ctx.fillStyle = COLORS.NOT.toCSS();
+        ctx.strokeStyle = OUTLINE_COLOR(COLORS.NOT).toCSS();
+        ctx.lineWidth = OUTLINE_WIDTH;
+        ctx.beginPath();
+        ctx.moveTo(-GRID_SIZE, -GRID_SIZE / 2);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(-GRID_SIZE, GRID_SIZE / 2);
+        ctx.lineTo(-GRID_SIZE, -GRID_SIZE / 2);
+        ctx.lineTo(0, 0);
+        ctx.fill();
+        ctx.stroke();
+    }
+}
+
 export class Toggle implements IBlock {
     static staticData: BlockDef = {
         default: () => new Toggle(false),
@@ -232,6 +287,9 @@ export class Toggle implements IBlock {
             }
         }
     ];
+    ioDeps: number[] = [];
+    
+    tick(): void {}
 
     constructor(state: boolean) {
         this.state = state;
@@ -272,6 +330,9 @@ export class LED implements IBlock {
     inputNodes: Vec2[] = [new Vec2(0, 0)];
     outputNodes: Vec2[] = [];
     listeners = [];
+    ioDeps: number[] = [0];
+
+    tick(): void {}
 
     constructor(state: boolean) {
         this.state = state;
@@ -300,7 +361,88 @@ export class LED implements IBlock {
     }
 }
 
+export class Delay implements IBlock {
+    static staticData: BlockDef = {
+        default: () => new Delay(),
+        defaultInputs: () => [false],
+        center: new Vec2(-GRID_SIZE / 2, 0),
+        iconSize: GRID_SIZE * 1.5,
+        name: "DELAY",
+        hitbox: {type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2*GRID_SIZE)}
+    }
+    data = And.staticData;
+
+    inputNodes: Vec2[] = [new Vec2(-GRID_SIZE, 0)];
+    outputNodes: Vec2[] = [new Vec2(0, 0)];
+    listeners = [];
+    ioDeps: number[] = [];
+
+    state: boolean = false;
+
+    calculate(input: boolean[]): boolean[] {
+        return [this.state];
+    }
+
+    tick(input: boolean[]): void {
+        this.state = input[0];
+    }
+
+    render(ctx: CanvasRenderingContext2D) {
+        ctx.lineCap = "butt";
+        ctx.lineJoin = "miter";
+        ctx.fillStyle = COLORS.DELAY.toCSS();
+        ctx.strokeStyle = OUTLINE_COLOR(COLORS.DELAY).toCSS();
+        ctx.lineWidth = OUTLINE_WIDTH;
+        ctx.fillRect(-GRID_SIZE, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+        ctx.strokeRect(-GRID_SIZE, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+        ctx.font = `${GRID_SIZE * 0.8}px "JetBrains Mono", monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = OUTLINE_COLOR(COLORS.DELAY).toCSS();
+        ctx.fillText("t", -GRID_SIZE / 2, 0);
+    }
+}
+
+export class WireNode implements IBlock {
+    static staticData: BlockDef = {
+        default: () => new WireNode(),
+        defaultInputs: () => [false],
+        center: new Vec2(0, 0),
+        iconSize: GRID_SIZE,
+        name: "NODE",
+        hitbox: {type: "circle", center: new Vec2(0), radius: GRID_SIZE / 2},
+        menuRender: (ctx: CanvasRenderingContext2D) => {
+            ctx.lineCap = "butt";
+            ctx.lineJoin = "miter";
+            ctx.fillStyle = COLORS.OFF.toCSS();
+            ctx.strokeStyle = OUTLINE_COLOR(COLORS.OFF).toCSS();
+            ctx.lineWidth = OUTLINE_WIDTH;
+            ctx.beginPath();
+            ctx.arc(0, 0, GRID_SIZE / 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        },
+    }
+    data = And.staticData;
+
+    inputNodes: Vec2[] = [new Vec2(0, 0)];
+    outputNodes: Vec2[] = [new Vec2(0, 0)];
+    listeners = [];
+    ioDeps: number[] = [0];
+
+    state: boolean = false;
+
+    calculate(input: boolean[]): boolean[] {
+        return input;
+    }
+
+    tick(input: boolean[]): void {}
+
+    render(ctx: CanvasRenderingContext2D) {}
+}
+
 export type NodeRef = {block: Block, outputId: number};
+export type InputNodeRef = {block: Block, inputId: number};
 export type NodeOrValue = NodeRef | boolean;
 export class Block {
     inputs: NodeOrValue[];
@@ -333,12 +475,45 @@ export class Block {
         }
 
         const inputs = [];
+        let i = 0;
         for (const input of this.inputs) {
             if (typeof input === "boolean") {
                 inputs.push(input);
             } else {
-                inputs.push(input.block.getOutput()[input.outputId]);
+                if (this.block.ioDeps.find(v => v === i) !== undefined) {
+                    inputs.push(input.block.getOutput()[input.outputId]);
+                } else {
+                    inputs.push(false);
+                }
             }
+            i++;
+        }
+        this.output = this.block.calculate(inputs);
+        return this.output;
+    }
+
+    getOutputWithLoopCheck(computing: Block[] = [this], depth: number = 0): null | boolean[] {
+        if (this.output !== null) {
+            return this.output;
+        }
+
+        if (depth !== 0 && computing.find(v => v === this) !== undefined) return null;
+        computing.push(this);
+
+        const inputs = [];
+        let i = 0;
+        for (const input of this.inputs) {
+            if (typeof input === "boolean") {
+                inputs.push(input);
+            } else {
+                if (this.block.ioDeps.find(v => v === i) !== undefined) {
+                    const newComputing = [...computing];
+                    const outputs = input.block.getOutputWithLoopCheck(newComputing, depth + 1);
+                    if (outputs === null) return null;
+                    inputs.push(outputs[input.outputId]);
+                }
+            }
+            i++;
         }
         this.output = this.block.calculate(inputs);
         return this.output;
@@ -359,6 +534,19 @@ export class Block {
             this.inputNodeEntities.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
         }
         world.spawn([this, transform, new CameraTransform(camera), new CanvasObject(ctx => this.block.render(ctx))]);
+    }
+
+    tick() {
+        const inputs = [];
+        for (const input of this.inputs) {
+            if (typeof input === "boolean") {
+                inputs.push(input);
+            } else {
+                inputs.push(input.block.getOutput()[input.outputId]);
+            }
+        }
+
+        this.block.tick(inputs);
     }
 
     remove(world: World) {

@@ -7,12 +7,14 @@ const COLORS = {
     AND: new RGB(0x00, 0xf7, 0xff),
     OR: new RGB(0xeb, 0xff, 0x00),
     XOR: new RGB(0xd0, 0x00, 0xff),
+    NOT: new RGB(209, 64, 19),
     ON: new RGB(0xff, 0x00, 0x00),
     OFF: new RGB(0x7f, 0x7f, 0x7f),
     LED: {
         ON: new RGB(0xff, 0x00, 0x00),
         OFF: new RGB(0x7f, 0x7f, 0x7f),
-    }
+    },
+    DELAY: new RGB(0xeb, 0xff, 0x00),
 };
 const OUTLINE_WIDTH = 8;
 const OUTLINE_COLOR = (color) => color_mix(0.5, color, new RGB(0, 0, 0));
@@ -29,9 +31,11 @@ export class And {
     inputNodes = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
+    ioDeps = [0, 1];
     calculate(input) {
         return [input.every(v => v)];
     }
+    tick() { }
     render(ctx) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
@@ -79,9 +83,11 @@ export class Or {
     inputNodes = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
+    ioDeps = [0, 1];
     calculate(input) {
         return [input.some(v => v)];
     }
+    tick() { }
     render(ctx) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
@@ -131,9 +137,11 @@ export class Xor {
     inputNodes = [new Vec2(-GRID_SIZE, -GRID_SIZE), new Vec2(-GRID_SIZE, GRID_SIZE)];
     outputNodes = [new Vec2(GRID_SIZE, 0)];
     listeners = [];
+    ioDeps = [0, 1];
     calculate(input) {
         return [input.filter(v => v).length % 2 === 1];
     }
+    tick() { }
     render(ctx) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
@@ -175,6 +183,40 @@ export class Xor {
         }
     }
 }
+export class Not {
+    static staticData = {
+        default: () => new Not(),
+        defaultInputs: () => [false],
+        center: new Vec2(-GRID_SIZE / 2, 0),
+        iconSize: GRID_SIZE * 1.5,
+        name: "NOT",
+        hitbox: { type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2 * GRID_SIZE) }
+    };
+    data = And.staticData;
+    inputNodes = [new Vec2(-GRID_SIZE, 0)];
+    outputNodes = [new Vec2(0, 0)];
+    listeners = [];
+    ioDeps = [0];
+    calculate(input) {
+        return [!input[0]];
+    }
+    tick(input) { }
+    render(ctx) {
+        ctx.lineCap = "butt";
+        ctx.lineJoin = "miter";
+        ctx.fillStyle = COLORS.NOT.toCSS();
+        ctx.strokeStyle = OUTLINE_COLOR(COLORS.NOT).toCSS();
+        ctx.lineWidth = OUTLINE_WIDTH;
+        ctx.beginPath();
+        ctx.moveTo(-GRID_SIZE, -GRID_SIZE / 2);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(-GRID_SIZE, GRID_SIZE / 2);
+        ctx.lineTo(-GRID_SIZE, -GRID_SIZE / 2);
+        ctx.lineTo(0, 0);
+        ctx.fill();
+        ctx.stroke();
+    }
+}
 export class Toggle {
     static staticData = {
         default: () => new Toggle(false),
@@ -197,6 +239,8 @@ export class Toggle {
             }
         }
     ];
+    ioDeps = [];
+    tick() { }
     constructor(state) {
         this.state = state;
     }
@@ -233,6 +277,8 @@ export class LED {
     inputNodes = [new Vec2(0, 0)];
     outputNodes = [];
     listeners = [];
+    ioDeps = [0];
+    tick() { }
     constructor(state) {
         this.state = state;
     }
@@ -257,6 +303,74 @@ export class LED {
         ctx.fill();
         ctx.stroke();
     }
+}
+export class Delay {
+    static staticData = {
+        default: () => new Delay(),
+        defaultInputs: () => [false],
+        center: new Vec2(-GRID_SIZE / 2, 0),
+        iconSize: GRID_SIZE * 1.5,
+        name: "DELAY",
+        hitbox: { type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2 * GRID_SIZE) }
+    };
+    data = And.staticData;
+    inputNodes = [new Vec2(-GRID_SIZE, 0)];
+    outputNodes = [new Vec2(0, 0)];
+    listeners = [];
+    ioDeps = [];
+    state = false;
+    calculate(input) {
+        return [this.state];
+    }
+    tick(input) {
+        this.state = input[0];
+    }
+    render(ctx) {
+        ctx.lineCap = "butt";
+        ctx.lineJoin = "miter";
+        ctx.fillStyle = COLORS.DELAY.toCSS();
+        ctx.strokeStyle = OUTLINE_COLOR(COLORS.DELAY).toCSS();
+        ctx.lineWidth = OUTLINE_WIDTH;
+        ctx.fillRect(-GRID_SIZE, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+        ctx.strokeRect(-GRID_SIZE, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+        ctx.font = `${GRID_SIZE * 0.8}px "JetBrains Mono", monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = OUTLINE_COLOR(COLORS.DELAY).toCSS();
+        ctx.fillText("t", -GRID_SIZE / 2, 0);
+    }
+}
+export class WireNode {
+    static staticData = {
+        default: () => new WireNode(),
+        defaultInputs: () => [false],
+        center: new Vec2(0, 0),
+        iconSize: GRID_SIZE,
+        name: "NODE",
+        hitbox: { type: "circle", center: new Vec2(0), radius: GRID_SIZE / 2 },
+        menuRender: (ctx) => {
+            ctx.lineCap = "butt";
+            ctx.lineJoin = "miter";
+            ctx.fillStyle = COLORS.OFF.toCSS();
+            ctx.strokeStyle = OUTLINE_COLOR(COLORS.OFF).toCSS();
+            ctx.lineWidth = OUTLINE_WIDTH;
+            ctx.beginPath();
+            ctx.arc(0, 0, GRID_SIZE / 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        },
+    };
+    data = And.staticData;
+    inputNodes = [new Vec2(0, 0)];
+    outputNodes = [new Vec2(0, 0)];
+    listeners = [];
+    ioDeps = [0];
+    state = false;
+    calculate(input) {
+        return input;
+    }
+    tick(input) { }
+    render(ctx) { }
 }
 export class Block {
     inputs;
@@ -286,13 +400,47 @@ export class Block {
             return this.output;
         }
         const inputs = [];
+        let i = 0;
         for (const input of this.inputs) {
             if (typeof input === "boolean") {
                 inputs.push(input);
             }
             else {
-                inputs.push(input.block.getOutput()[input.outputId]);
+                if (this.block.ioDeps.find(v => v === i) !== undefined) {
+                    inputs.push(input.block.getOutput()[input.outputId]);
+                }
+                else {
+                    inputs.push(false);
+                }
             }
+            i++;
+        }
+        this.output = this.block.calculate(inputs);
+        return this.output;
+    }
+    getOutputWithLoopCheck(computing = [this], depth = 0) {
+        if (this.output !== null) {
+            return this.output;
+        }
+        if (depth !== 0 && computing.find(v => v === this) !== undefined)
+            return null;
+        computing.push(this);
+        const inputs = [];
+        let i = 0;
+        for (const input of this.inputs) {
+            if (typeof input === "boolean") {
+                inputs.push(input);
+            }
+            else {
+                if (this.block.ioDeps.find(v => v === i) !== undefined) {
+                    const newComputing = [...computing];
+                    const outputs = input.block.getOutputWithLoopCheck(newComputing, depth + 1);
+                    if (outputs === null)
+                        return null;
+                    inputs.push(outputs[input.outputId]);
+                }
+            }
+            i++;
         }
         this.output = this.block.calculate(inputs);
         return this.output;
@@ -311,6 +459,18 @@ export class Block {
             this.inputNodeEntities.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
         }
         world.spawn([this, transform, new CameraTransform(camera), new CanvasObject(ctx => this.block.render(ctx))]);
+    }
+    tick() {
+        const inputs = [];
+        for (const input of this.inputs) {
+            if (typeof input === "boolean") {
+                inputs.push(input);
+            }
+            else {
+                inputs.push(input.block.getOutput()[input.outputId]);
+            }
+        }
+        this.block.tick(inputs);
     }
     remove(world) {
         const e = world.getEntities(Block).find(v => v(Block) === this);

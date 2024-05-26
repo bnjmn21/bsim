@@ -11,6 +11,7 @@ export const perfData = {
         blocks: 0,
         other: 0,
     },
+    simulation: 0,
     idle: 0,
     other: 0,
     last_idle_start: 0,
@@ -35,6 +36,7 @@ export function debugViewPlugin(world) {
     });
     world.system(Loop, _ => {
         perfData.last_frame_start = time.ms();
+        perfData.simulation = 0;
         perfData.render.total = 0;
         perfData.render.bg = 0;
         perfData.render.nodes = 0;
@@ -72,12 +74,13 @@ export function debugViewPlugin(world) {
             const total = time.ms() - perfData.last_frame_start;
             perfData.idle = time.ms() - perfData.last_idle_start;
             perfData.render.total = perfData.render.bg + perfData.render.nodes + perfData.render.wires + perfData.render.blocks + perfData.render.other;
-            perfData.other = total - (perfData.render.total);
+            perfData.other = total - (perfData.render.total + perfData.simulation);
             pieGraph.center = overlayCanvas.size().sub(new Vec2(200));
             const pieces = [];
             if (currentPieGraph === 0) {
                 pieces.push({ name: "render", style: "#ff0000", val: perfData.render.total });
-                pieces.push({ name: "other", style: "#00ffff", val: perfData.other });
+                pieces.push({ name: "simulation", style: "#00ffff", val: perfData.simulation });
+                pieces.push({ name: "other", style: "#ffff00", val: perfData.other });
                 if (showIdleInPieGraph) {
                     pieces.push({ name: "idle", style: "#7f7f7f", val: perfData.idle });
                 }

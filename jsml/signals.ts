@@ -14,7 +14,7 @@ export function isSignal<T>(signal: T): T extends Signal<any> ? true : false {
     return false as (T extends Signal<any> ? true : false);
 }
 
-class Value<T> implements Signal<T> {
+export class Value<T> implements Signal<T> {
     listening: boolean = false;
     calledWhileListening: boolean = false;
     value: T;
@@ -73,7 +73,7 @@ class Value<T> implements Signal<T> {
     }
 }
 
-class Computed<T> implements Signal<T> {
+export class Computed<T> implements Signal<T> {
     listening: boolean = false;
     calledWhileListening: boolean = false;
     computeFn: () => T;

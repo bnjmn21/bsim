@@ -4,6 +4,7 @@ import { I18N, LANG } from "../lang.js";
 import * as icons from "../icons.js";
 import { signals } from "../jsml/signals.js";
 import { effectAndInit, settings } from "../bsim.js";
+import { saveSettings } from "../persistency.js";
 
 export const showSettings = signals.value(false);
 effectAndInit(showSettings, () => {
@@ -26,6 +27,7 @@ export function settingsPlugin(world: World) {
                 .class("icon-btn")
                 .click(_ => {
                     showSettings.set(false);
+                    saveSettings(settings);
                 });
         }).class("settings-title-bar");
         ui.div(ui => {
@@ -40,9 +42,6 @@ export function settingsPlugin(world: World) {
                 ui.button(ui => ui.text(I18N["de_de"].LANGS.DE_DE))
                     .classIf("focus", () => LANG.get() === "de_de")
                     .click(_ => LANG.set("de_de"));
-                ui.button(ui => ui.text(I18N["la_ro"].LANGS.LA_RO))
-                    .classIf("focus", () => LANG.get() === "la_ro")
-                    .click(_ => LANG.set("la_ro"));
             }).class("settings-buttons-select");
             ui.div(ui => {
                 ui.h3(ui => {
@@ -63,17 +62,6 @@ export function settingsPlugin(world: World) {
                         ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.HIGH))
                             .classIf("focus", () => settings.graphics.blur.get() === "high")
                             .click(_ => settings.graphics.blur.set("high"));
-                    }).class("settings-buttons-select");
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.BACKGROUND);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.BACKGROUND_FLAT))
-                            .classIf("focus", () => !settings.graphics.shaded_background.get())
-                            .click(_ => settings.graphics.shaded_background.set(false));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.BACKGROUND_SHADED))
-                            .classIf("focus", settings.graphics.shaded_background)
-                            .click(_ => settings.graphics.shaded_background.set(true));
                     }).class("settings-buttons-select");
                     ui.h4(ui => {
                         ui.text(I18N[LANG.get()].SETTINGS.GATE_SYMBOLS);

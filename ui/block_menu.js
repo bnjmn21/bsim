@@ -22,7 +22,12 @@ export function blockMenuPlugin(world) {
                                     ctx.translate(canvas.size().x / 2, canvas.size().y / 2);
                                     ctx.scale((1 / block.staticData.iconSize) * canvas.size().x, (1 / block.staticData.iconSize) * canvas.size().y);
                                     ctx.translate(-block.staticData.center.x, -block.staticData.center.y);
-                                    block.staticData.default().render(ctx);
+                                    if (block.staticData.menuRender) {
+                                        block.staticData.menuRender(ctx);
+                                    }
+                                    else {
+                                        block.staticData.default().render(ctx);
+                                    }
                                 });
                             });
                         })

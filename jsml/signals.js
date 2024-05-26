@@ -4,7 +4,7 @@ export function isSignal(signal) {
     }
     return false;
 }
-class Value {
+export class Value {
     listening = false;
     calledWhileListening = false;
     value;
@@ -54,7 +54,7 @@ class Value {
         this.effects.push(effect);
     }
 }
-class Computed {
+export class Computed {
     listening = false;
     calledWhileListening = false;
     computeFn;
