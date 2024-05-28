@@ -115,3 +115,9 @@ h4 + .settings-buttons-select {
     background: var(--accent-dark);
     border: 1px solid var(--accent-light);
 }
+
+.setting-note {
+    color: var(--fg-dark);
+    font-size: .75rem;
+    margin: 0;
+}

@@ -215,7 +215,6 @@ export function bsim(world) {
         }
     });
     canvas.autoFitToParent();
-    let canvasBackground = canvas.context2d.createImageData(canvas.size().x, canvas.size().y);
     overlayCanvas.autoFitToParent();
     canvas.canvas.addEventListener("click", event => {
         if (keys.ctrl.get() || keys.meta.get())

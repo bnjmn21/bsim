@@ -23,6 +23,7 @@ export const I18N = {
             ADVANCED: "Advanced",
             DEBUG_DISPLAY: "FPS graph",
             PERF_GRAPH: "Performance graph",
+            PERF_GRAPH_NOTE: "Performance graph might not work correctly on all browsers.\nIn Firefox the privacy.reduceTimerPrecision flag must be set to false",
 
             HIGH: "High",
             LOW: "Low",
@@ -90,6 +91,7 @@ export const I18N = {
             ADVANCED: "Erweitert",
             DEBUG_DISPLAY: "FPS-Graph",
             PERF_GRAPH: "Performance-Graph",
+            PERF_GRAPH_NOTE: `Der Performance-Graph funktioniert evtl. nicht in allen Browsern.\nIn Firefox muss die Flag "privacy.reduceTimerPrecision" auf false gesetzt werden.`,
 
             HIGH: "Hoch",
             LOW: "Niedrig",

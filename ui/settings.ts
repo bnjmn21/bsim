@@ -1,8 +1,8 @@
 import { World } from "../engine/ecs.js";
-import { JSML } from "../jsml/jsml.js";
+import { JSML, Ui } from "../jsml/jsml.js";
 import { I18N, LANG } from "../lang.js";
 import * as icons from "../icons.js";
-import { signals } from "../jsml/signals.js";
+import { Value, signals } from "../jsml/signals.js";
 import { effectAndInit, settings } from "../bsim.js";
 import { saveSettings } from "../persistency.js";
 
@@ -14,6 +14,33 @@ effectAndInit(showSettings, () => {
         (document.getElementById("settings-container") as HTMLElement).classList.remove("show");
     }
 });
+
+function section(ui: Ui, icon: string, name: () => string, inner: (ui: Ui) => void) {
+    ui.div(ui => {
+        ui.h3(ui => {
+            ui.html(icon).class("icon");
+            ui.text(name);
+        });
+        ui.div(inner).class("settings-subsection-inner");
+    }).class("settings-subsection");
+}
+
+function setting(ui: Ui, name: () => string, inner: (ui: Ui) => void) {
+    ui.h4(ui => {
+        ui.text(name);
+    });
+    ui.div(inner).class("settings-buttons-select");
+}
+
+function option<T>(ui: Ui, name: () => string, signal: Value<T>, value: T) {
+    ui.button(ui => ui.text(name))
+        .classIf("focus", () => signal.get() === value)
+        .click(_ => signal.set(value));
+}
+
+function note(ui: Ui, text: () => string) {
+    ui.p(ui => ui.text(text)).class("setting-note");
+}
 
 export function settingsPlugin(world: World) {
     const settingsUi = new JSML(document.getElementById("settings-window") as HTMLElement);
@@ -43,69 +70,28 @@ export function settingsPlugin(world: World) {
                     .classIf("focus", () => LANG.get() === "de_de")
                     .click(_ => LANG.set("de_de"));
             }).class("settings-buttons-select");
-            ui.div(ui => {
-                ui.h3(ui => {
-                    ui.html(icons.display).class("icon");
-                    ui.text(I18N[LANG.get()].SETTINGS.GRAPHICS);
+            section(ui, icons.display, () => I18N[LANG.get()].SETTINGS.GRAPHICS, ui => {
+                setting(ui, () => I18N[LANG.get()].SETTINGS.BLUR, ui => {
+                    option(ui, () => I18N[LANG.get()].SETTINGS.OFF, settings.graphics.blur, "off");
+                    option(ui, () => I18N[LANG.get()].SETTINGS.LOW, settings.graphics.blur, "low");
+                    option(ui, () => I18N[LANG.get()].SETTINGS.HIGH, settings.graphics.blur, "high");
                 });
-                ui.div(ui => {
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.BLUR);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.OFF))
-                            .classIf("focus", () => settings.graphics.blur.get() === "off")
-                            .click(_ => settings.graphics.blur.set("off"));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.LOW))
-                            .classIf("focus", () => settings.graphics.blur.get() === "low")
-                            .click(_ => settings.graphics.blur.set("low"));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.HIGH))
-                            .classIf("focus", () => settings.graphics.blur.get() === "high")
-                            .click(_ => settings.graphics.blur.set("high"));
-                    }).class("settings-buttons-select");
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.GATE_SYMBOLS);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.GATE_SYMBOLS_ANSI))
-                            .classIf("focus", () => settings.graphics.gate_symbols.get() === "ansi")
-                            .click(_ => settings.graphics.gate_symbols.set("ansi"));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.GATE_SYMBOLS_IEC))
-                            .classIf("focus", () => settings.graphics.gate_symbols.get() === "iec")
-                            .click(_ => settings.graphics.gate_symbols.set("iec"));
-                    }).class("settings-buttons-select");
-                }).class("settings-subsection-inner");
-            }).class("settings-subsection");
-            ui.div(ui => {
-                ui.h3(ui => {
-                    ui.html(icons.cube).class("icon");
-                    ui.text(I18N[LANG.get()].SETTINGS.ADVANCED);
+                setting(ui, () => I18N[LANG.get()].SETTINGS.GATE_SYMBOLS, ui => {
+                    option(ui, () => I18N[LANG.get()].SETTINGS.GATE_SYMBOLS_ANSI, settings.graphics.gate_symbols, "ansi");
+                    option(ui, () => I18N[LANG.get()].SETTINGS.GATE_SYMBOLS_IEC, settings.graphics.gate_symbols, "iec");
                 });
-                ui.div(ui => {
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.DEBUG_DISPLAY);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.HIDE))
-                            .classIf("focus", () => !settings.advanced.debug_display.get())
-                            .click(_ => settings.advanced.debug_display.set(false));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.SHOW))
-                            .classIf("focus", settings.advanced.debug_display)
-                            .click(_ => settings.advanced.debug_display.set(true));
-                    }).class("settings-buttons-select");
-                    ui.h4(ui => {
-                        ui.text(I18N[LANG.get()].SETTINGS.PERF_GRAPH);
-                    });
-                    ui.div(ui => {
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.HIDE))
-                            .classIf("focus", () => !settings.advanced.perf_graph.get())
-                            .click(_ => settings.advanced.perf_graph.set(false));
-                        ui.button(ui => ui.text(I18N[LANG.get()].SETTINGS.SHOW))
-                            .classIf("focus", settings.advanced.perf_graph)
-                            .click(_ => settings.advanced.perf_graph.set(true));
-                    }).class("settings-buttons-select");
-                }).class("settings-subsection-inner");
-            }).class("settings-subsection");
+            });
+            section(ui, icons.cube, () => I18N[LANG.get()].SETTINGS.ADVANCED, ui => {
+                setting(ui, () => I18N[LANG.get()].SETTINGS.DEBUG_DISPLAY, ui => {
+                    option(ui, () => I18N[LANG.get()].SETTINGS.HIDE, settings.advanced.debug_display, false);
+                    option(ui, () => I18N[LANG.get()].SETTINGS.SHOW, settings.advanced.debug_display, true);
+                });
+                setting(ui, () => I18N[LANG.get()].SETTINGS.PERF_GRAPH, ui => {
+                    option(ui, () => I18N[LANG.get()].SETTINGS.HIDE, settings.advanced.perf_graph, false);
+                    option(ui, () => I18N[LANG.get()].SETTINGS.SHOW, settings.advanced.perf_graph, true);
+                });
+                note(ui, () => I18N[LANG.get()].SETTINGS.PERF_GRAPH_NOTE);
+            });
         }).class("settings-main");
     });
 }

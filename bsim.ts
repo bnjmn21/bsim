@@ -236,7 +236,6 @@ export function bsim(world: World) {
     });
 
     canvas.autoFitToParent();
-    let canvasBackground = canvas.context2d.createImageData(canvas.size().x, canvas.size().y);
 
     overlayCanvas.autoFitToParent();
 

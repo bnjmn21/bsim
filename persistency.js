@@ -29,7 +29,7 @@ export function loadSettings() {
                 gate_symbols: signals.value("ansi"),
             },
             advanced: {
-                debug_display: signals.value(true),
+                debug_display: signals.value(false),
                 perf_graph: signals.value(false),
             }
         };
