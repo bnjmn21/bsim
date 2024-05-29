@@ -57,6 +57,11 @@ export const keys = {
     alt: signals.value(false),
     meta: signals.value(false),
 };
+export const hoverState = {
+    wireNode: signals.value(false),
+    inputNode: signals.value(false),
+    hitbox: signals.value(false),
+};
 export const controlState = {
     playing: signals.value(false),
     speed: signals.value(1),
@@ -111,50 +116,47 @@ export function bsim(world) {
         if (dragging.inner?.type === "move") {
             dragging.inner.block.pos.set(roundedPos);
         }
+        hoverState.inputNode.set(!!getConnectedHoveringInputNode(world, camera));
+        hoverState.wireNode.set(getHoveringBlock(world, camera)?.block instanceof WireNode);
+        hoverState.hitbox.set(!!getHoveringListener(world, camera));
     });
     canvas.canvas.addEventListener("mousedown", e => {
         if (e.button === 0) {
             if (keys.alt.get() && (!(keys.ctrl.get() || keys.meta.get()))) {
-                const inputNodes = world.getEntities(InputNode).map(v => v(InputNode));
-                for (const node of inputNodes) {
-                    if (typeof node.ref.inputs[node.inputId] !== "boolean") {
-                        const nodePos = node.ref.pos.pos.add(node.ref.block.inputNodes[node.inputId]);
-                        if (circleHitbox(nodePos, GRID_SIZE / 2, camera.mouseWorldCoords())) {
-                            dragging.inner = {
-                                type: "wire",
-                                from: { block: node.ref.inputs[node.inputId].block, outputId: node.ref.inputs[node.inputId].outputId },
-                            };
-                            node.ref.inputs[node.inputId] = false;
-                            recalculate(world);
-                            return;
-                        }
-                    }
+                const hoveringInputNode = getConnectedHoveringInputNode(world, camera);
+                if (hoveringInputNode) {
+                    dragging.inner = {
+                        type: "wire",
+                        from: {
+                            block: hoveringInputNode.ref.inputs[hoveringInputNode.inputId].block,
+                            outputId: hoveringInputNode.ref.inputs[hoveringInputNode.inputId].outputId
+                        },
+                    };
+                    hoveringInputNode.ref.inputs[hoveringInputNode.inputId] = false;
+                    recalculate(world);
+                    return;
                 }
-                return;
             }
             if (!(keys.ctrl.get() || keys.meta.get())) {
-                const outputNodes = world.getEntities([OutputNode, Transform]).map(v => [v(OutputNode), v(Transform)]);
-                for (const node of outputNodes) {
-                    const startPos = node[0].ref.pos.pos.add(node[0].ref.block.outputNodes[node[0].outputId]);
-                    if (circleHitbox(startPos, GRID_SIZE / 2, camera.mouseWorldCoords())) {
-                        dragging.inner = {
-                            type: "wire",
-                            from: { block: node[0].ref, outputId: node[0].outputId },
-                        };
-                        return;
-                    }
+                const hoveringOutputNode = getHoveringOutputNode(world, camera);
+                if (hoveringOutputNode) {
+                    dragging.inner = {
+                        type: "wire",
+                        from: {
+                            block: hoveringOutputNode.ref,
+                            outputId: hoveringOutputNode.outputId
+                        },
+                    };
+                    return;
                 }
             }
-            const blocks = world.getEntities(Block).map(v => v(Block));
-            for (const block of blocks) {
-                const hb = block.block.data.hitbox;
-                const mouseRelativeToHb = camera.mouseWorldCoords().sub(block.pos.pos);
-                if (hitbox(hb, mouseRelativeToHb)) {
-                    dragging.inner = {
-                        type: "move",
-                        block: block
-                    };
-                }
+            const hoveringBlock = getHoveringBlock(world, camera);
+            if (hoveringBlock) {
+                dragging.inner = {
+                    type: "move",
+                    block: hoveringBlock
+                };
+                return;
             }
         }
     });
@@ -219,28 +221,10 @@ export function bsim(world) {
     canvas.canvas.addEventListener("click", event => {
         if (keys.ctrl.get() || keys.meta.get())
             return;
-        const clickPos = new Vec2(event.clientX, event.clientY);
-        for (const e of world.getEntities(Block)) {
-            for (const listener of e(Block).block.listeners) {
-                if (listener.hitbox.type === "rect") {
-                    if (rectHitbox(camera.worldToScreenCoords(listener.hitbox.pos.add(e(Block).pos.pos)), camera.worldToScreenCoords(listener.hitbox.pos.add(e(Block).pos.pos).add(listener.hitbox.size)), clickPos)) {
-                        const res = listener.fn(event);
-                        if (res) {
-                            recalculate(world);
-                        }
-                    }
-                }
-                else if (listener.hitbox.type === "circle") {
-                    if (circleHitbox(listener.hitbox.center, listener.hitbox.radius, camera.screenToWorldCoords(clickPos))) {
-                        const res = listener.fn(event);
-                        if (res) {
-                            for (const block of world.getEntities(Block)) {
-                                block(Block).output = null;
-                                block(Block).getOutput();
-                            }
-                        }
-                    }
-                }
+        const listener = getHoveringListener(world, camera);
+        if (listener) {
+            if (listener(event)) {
+                recalculate(world);
             }
         }
     });
@@ -514,4 +498,47 @@ function tick(world) {
         block(Block).tick();
     }
     recalculate(world);
+}
+function getConnectedHoveringInputNode(world, camera) {
+    const inputNodes = world.getEntities(InputNode).map(v => v(InputNode));
+    for (const node of inputNodes) {
+        if (typeof node.ref.inputs[node.inputId] !== "boolean") {
+            const nodePos = node.ref.pos.pos.add(node.ref.block.inputNodes[node.inputId]);
+            if (circleHitbox(nodePos, GRID_SIZE / 2, camera.mouseWorldCoords())) {
+                return node;
+            }
+        }
+    }
+    return null;
+}
+function getHoveringOutputNode(world, camera) {
+    const outputNodes = world.getEntities(OutputNode).map(v => v(OutputNode));
+    for (const node of outputNodes) {
+        const startPos = node.ref.pos.pos.add(node.ref.block.outputNodes[node.outputId]);
+        if (circleHitbox(startPos, GRID_SIZE / 2, camera.mouseWorldCoords())) {
+            return node;
+        }
+    }
+    return null;
+}
+function getHoveringBlock(world, camera) {
+    const blocks = world.getEntities(Block).map(v => v(Block));
+    for (const block of blocks) {
+        const hb = block.block.data.hitbox;
+        const mouseRelativeToHb = camera.mouseWorldCoords().sub(block.pos.pos);
+        if (hitbox(hb, mouseRelativeToHb)) {
+            return block;
+        }
+    }
+    return null;
+}
+function getHoveringListener(world, camera) {
+    for (const e of world.getEntities(Block)) {
+        for (const listener of e(Block).block.listeners) {
+            if (hitbox(listener.hitbox, camera.mouseWorldCoords().sub(e(Block).pos.pos))) {
+                return listener.fn;
+            }
+        }
+    }
+    return null;
 }

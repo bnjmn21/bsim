@@ -55,14 +55,15 @@ export const I18N = {
         },
         KEYBOARD: {
             CTRL_PC: "CTRL",
-            CTRL_MAC: "⌘",
+            META_MAC: "⌘",
             ALT_PC: "ALT",
             ALT_MAC: "⌥",
             SHIFT: "SHIFT",
         },
         TIPS: {
-            MOVE_NODE: "Move nodes",
-            DISCONNECT: "Disconnect cables from inputs",
+            MOVE_NODE: "Move node",
+            DISCONNECT: "Disconnect cable from input",
+            INTERACT: "Interact"
         }
     },
     de_de: {
@@ -120,14 +121,15 @@ export const I18N = {
         },
         KEYBOARD: {
             CTRL_PC: "STRG",
-            CTRL_MAC: "⌘",
+            META_MAC: "⌘",
             ALT_PC: "ALT",
             ALT_MAC: "⌥",
             SHIFT: "SHIFT",
         },
         TIPS: {
             MOVE_NODE: "Knoten verschieben",
-            DISCONNECT: "Kabel von Eingängen trennen",
+            DISCONNECT: "Kabel von Eingang trennen",
+            INTERACT: "Interargieren"
         }
     }
 };
