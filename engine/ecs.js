@@ -1,5 +1,5 @@
-function createEntityWrapper(entity, entityArray) {
-    const conformingEntity = entity;
+function createEntityWrapper(world, entity, entityArray) {
+    let conformingEntity = entity;
     const entityReference = (component) => {
         return conformingEntity.find(v => v.constructor === component);
     };
@@ -17,6 +17,20 @@ function createEntityWrapper(entity, entityArray) {
     };
     entityReference.delete = () => {
         delete entityArray[entityArray.findIndex(v => v === conformingEntity)];
+    };
+    entityReference.deleteComponent = (component) => {
+        const newEntity = conformingEntity.filter(v => v.constructor !== component);
+        world.spawn(newEntity);
+        delete entityArray[entityArray.findIndex(v => v === conformingEntity)];
+        const components = newEntity.map(v => v.constructor);
+        return createEntityWrapper(world, newEntity, componentMapGetExact(world.entityRegistries, components));
+    };
+    entityReference.addComponent = (component) => {
+        const newEntity = [component, ...conformingEntity];
+        world.spawn(newEntity);
+        delete entityArray[entityArray.findIndex(v => v === conformingEntity)];
+        const components = newEntity.map(v => v.constructor);
+        return createEntityWrapper(world, newEntity, componentMapGetExact(world.entityRegistries, components));
     };
     return entityReference;
 }
@@ -39,7 +53,7 @@ function componentMapGetExact(map, key) {
 export class World {
     entityRegistries = new Map();
     scheduleRegistry = new Registry("schedule");
-    systemRegistries = [];
+    systems = [];
     plugins = [];
     Setup;
     constructor() {
@@ -52,7 +66,7 @@ export class World {
             if (containsAll(registryComponents, flatComponents)) {
                 for (let entity of entities) {
                     if (entity) {
-                        totalEntities.push(createEntityWrapper(entity, entities));
+                        totalEntities.push(createEntityWrapper(this, entity, entities));
                     }
                 }
             }
@@ -75,61 +89,26 @@ export class World {
         else {
             componentMapGetExact(this.entityRegistries, componentTypes).push(flatComponents);
         }
-        return createEntityWrapper(flatComponents, componentMapGetExact(this.entityRegistries, componentTypes));
+        return createEntityWrapper(this, flatComponents, componentMapGetExact(this.entityRegistries, componentTypes));
     }
     schedule() {
         const reference = this.scheduleRegistry.push(null, () => ({}));
-        this.systemRegistries[reference.data.index] = new Map();
         return reference;
     }
-    system(schedule, ...args) {
-        const invArgs = () => new Error("Invalid Arguments. Syntax:\n" +
-            "- system(schedule, ...components <can be (nested) arrays>..., function)\n" +
-            "- system(schedule, ...arrays of [...components <can be (nested) arrays>..., function])\n" +
-            "These can be combined:\n" +
-            "system(schedule,\n" +
-            "   Comp1, Comp2, fn,\n" +
-            "   [Comp1, Comp2], Comp3, fn,\n" +
-            "   [Comp1, Comp2, fn, Comp3, fn],\n" +
-            "   [[Comp1, Comp2], fn, Comp3, fn]\n" +
-            ");\n" +
-            "This is all one function, creating many systems at once,\n" +
-            "where each function gets the components before it");
-        if (args.length < 1) {
-            throw invArgs();
+    system(schedule, deepComponents, system) {
+        let components;
+        if (deepComponents instanceof Array) {
+            components = deepComponents.flat();
         }
-        if (!recursiveEvery(args, v => v.length === 0 ||
-            typeof v[v.length - 1] === "function" ||
-            v.every(sv => sv.constructor === Array))) {
-            throw invArgs();
+        else {
+            components = [deepComponents];
         }
-        const flatArgs = args.flat();
-        let components = [];
-        for (let arg of flatArgs) {
-            if (arg.toString().startsWith("class")) {
-                components.push(arg);
-            }
-            else if (typeof arg === "function") {
-                if (!componentMapHasExact(this.systemRegistries[schedule.data.index], components)) {
-                    this.systemRegistries[schedule.data.index].set(components, [arg]);
-                }
-                else {
-                    componentMapGetExact(this.systemRegistries[schedule.data.index], components).push(arg);
-                }
-                components = [];
-            }
-            else {
-                throw invArgs();
-            }
-        }
-        if (components.length !== 0) {
-            throw invArgs();
-        }
+        this.systems[schedule.data.index].push([components, system]);
     }
     runSchedule(schedule) {
         this.scheduleRegistry.checkRefAndThrow(schedule);
-        const scheduleSystems = this.systemRegistries[schedule.data.index];
-        for (let [components, systems] of scheduleSystems) {
+        const scheduleSystems = this.systems[schedule.data.index];
+        for (let [components, system] of scheduleSystems) {
             let entities;
             if (components.length !== 0) {
                 entities = this.getEntities(components);
@@ -137,9 +116,7 @@ export class World {
             else {
                 entities = this.getEntities();
             }
-            for (let system of systems) {
-                system(entities);
-            }
+            system(entities);
         }
     }
     plugin(plugin, ...args) {
@@ -269,14 +246,14 @@ export class Plugins {
         const time = new Time();
         const Loop = world.schedule();
         const AfterLoop = world.schedule();
-        world.system(Loop, _ => {
+        world.system(Loop, [], _ => {
             time.frame();
             requestAnimationFrame(() => {
                 world.runSchedule(Loop);
                 world.runSchedule(AfterLoop);
             });
         });
-        world.system(world.Setup, _ => {
+        world.system(world.Setup, [], _ => {
             time.frame();
             world.runSchedule(Loop);
             world.runSchedule(AfterLoop);

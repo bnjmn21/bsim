@@ -8,9 +8,10 @@ export type EntityWrapper<T extends Constructor<any>> = (<E extends Instance<T>>
     componentValues: () => T[];
     components: () => [T, Instance<T>][];
     delete: () => void;
+    deleteComponent: <E extends Instance<T>>(component: Constructor<E>) => void;
 };
-function createEntityWrapper<T extends Constructor<any>>(entity: Entity<Instance<T>>, entityArray: Entity<any>[]): EntityWrapper<T> {
-    const conformingEntity = entity as Entity<Instance<T>>;
+function createEntityWrapper<T extends Constructor<any>>(world: World, entity: Entity<Instance<T>>, entityArray: Entity<any>[]): EntityWrapper<T> {
+    let conformingEntity = entity as Entity<Instance<T>>;
     const entityReference = <E extends Instance<T>>(component: Constructor<E>) => {
         return conformingEntity.find(v => v.constructor === component) as Instance<T>;
     }
@@ -28,6 +29,20 @@ function createEntityWrapper<T extends Constructor<any>>(entity: Entity<Instance
     }
     entityReference.delete = () => {
         delete entityArray[entityArray.findIndex(v => v === conformingEntity)];
+    }
+    entityReference.deleteComponent = <E extends Instance<T>>(component: Constructor<E>): EntityWrapper<Exclude<T, Constructor<E>>> => {
+        const newEntity = conformingEntity.filter(v => v.constructor !== component) as (Exclude<Instance<T>, E>[]);
+        world.spawn(newEntity);
+        delete entityArray[entityArray.findIndex(v => v === conformingEntity)];
+        const components = newEntity.map(v => v.constructor as Constructor<Exclude<Instance<T>, E>>);
+        return createEntityWrapper<Exclude<T, Constructor<E>>>(world, newEntity, componentMapGetExact(world.entityRegistries, components));
+    }
+    entityReference.addComponent = <E extends Instance<any>>(component: E): EntityWrapper<T | Constructor<E>> => {
+        const newEntity = [component, ...conformingEntity];
+        world.spawn(newEntity);
+        delete entityArray[entityArray.findIndex(v => v === conformingEntity)];
+        const components = newEntity.map(v => (v as {constructor: Constructor<T | Constructor<E>>}).constructor);
+        return createEntityWrapper<T | Constructor<E>>(world, newEntity, componentMapGetExact(world.entityRegistries, components));
     }
     return entityReference;
 }
@@ -62,7 +77,7 @@ function componentMapGetExact(map: Map<Constructor<any>[], any>, key: Constructo
 export class World {
     entityRegistries: Map<Constructor<any>[], Entity<any>[]> = new Map();
     scheduleRegistry: Registry<null, "schedule", {}> = new Registry("schedule");
-    systemRegistries: Map<Constructor<any>[], Function[]>[] = [];
+    systems: [Constructor<any>[], System<any>][][] = [];
     plugins: InternalPlugin[] = [];
     Setup;
 
@@ -77,7 +92,7 @@ export class World {
             if (containsAll(registryComponents, flatComponents)) {
                 for (let entity of entities) {
                     if (entity) {
-                        totalEntities.push(createEntityWrapper(entity, entities));
+                        totalEntities.push(createEntityWrapper(this, entity, entities));
                     }
                 }
             }
@@ -100,74 +115,35 @@ export class World {
         } else {
             (componentMapGetExact(this.entityRegistries, componentTypes) as Entity<any>[]).push(flatComponents);
         }
-        return createEntityWrapper(flatComponents, componentMapGetExact(this.entityRegistries, componentTypes) as Entity<any>[]);
+        return createEntityWrapper(this, flatComponents, componentMapGetExact(this.entityRegistries, componentTypes) as Entity<any>[]);
     }
 
     schedule(): Reference<null, "schedule", {}> {
         const reference = this.scheduleRegistry.push(null, () => ({}));
-        this.systemRegistries[reference.data.index] = new Map();
         return reference;
     }
 
-    system<T extends Constructor<any>>(schedule: Schedule, ...args: DeepArray<T | System<T>>) {
-        const invArgs = () => new Error(
-            "Invalid Arguments. Syntax:\n" +
-            "- system(schedule, ...components <can be (nested) arrays>..., function)\n" +
-            "- system(schedule, ...arrays of [...components <can be (nested) arrays>..., function])\n" +
-            "These can be combined:\n" +
-            "system(schedule,\n" +
-            "   Comp1, Comp2, fn,\n" +
-            "   [Comp1, Comp2], Comp3, fn,\n" +
-            "   [Comp1, Comp2, fn, Comp3, fn],\n" +
-            "   [[Comp1, Comp2], fn, Comp3, fn]\n" +
-            ");\n" +
-            "This is all one function, creating many systems at once,\n" +
-            "where each function gets the components before it"
-        );
-
-        if (args.length < 1) {
-            throw invArgs();
+    system<T extends Constructor<any>>(schedule: Schedule, deepComponents: DeepArray<T> | T, system: System<T>) {
+        let components: T[];
+        if (deepComponents instanceof Array) {
+            components = deepComponents.flat() as T[];
+        } else {
+            components = [deepComponents];
         }
-        if (!recursiveEvery(args, v => v.length === 0 ||
-            typeof v[v.length - 1] === "function" ||
-            v.every(sv => sv.constructor === Array)))
-        {
-            throw invArgs();
-        }
-        const flatArgs = args.flat() as (T | System<T>)[];
-        let components = [];
-        for (let arg of flatArgs) {
-            if (arg.toString().startsWith("class")) {
-                components.push(arg as T);
-            } else if (typeof arg === "function") {
-                if (!componentMapHasExact(this.systemRegistries[schedule.data.index], components)) {
-                    this.systemRegistries[schedule.data.index].set(components, [arg]);
-                } else {
-                    (componentMapGetExact(this.systemRegistries[schedule.data.index], components) as Function[]).push(arg);
-                }
-                components = [];
-            } else {
-                throw invArgs();
-            }
-        }
-        if (components.length !== 0) {
-            throw invArgs();
-        }
+        this.systems[schedule.data.index].push([components, system]);
     }
 
     runSchedule(schedule: Schedule) {
         this.scheduleRegistry.checkRefAndThrow(schedule);
-        const scheduleSystems = this.systemRegistries[schedule.data.index];
-        for (let [components, systems] of scheduleSystems) {
+        const scheduleSystems = this.systems[schedule.data.index];
+        for (let [components, system] of scheduleSystems) {
             let entities;
             if (components.length !== 0) {
                 entities = this.getEntities(components);
             } else {
                 entities = this.getEntities();
             }
-            for (let system of systems) {
-                system(entities);
-            }
+            system(entities);
         }
     }
 
@@ -318,14 +294,14 @@ export class Plugins {
         const time = new Time();
         const Loop = world.schedule();
         const AfterLoop = world.schedule();
-        world.system(Loop, _ => {
+        world.system(Loop, [], _ => {
             time.frame();
             requestAnimationFrame(() => {
                 world.runSchedule(Loop);
                 world.runSchedule(AfterLoop);
             });
         });
-        world.system(world.Setup, _ => {
+        world.system(world.Setup, [], _ => {
             time.frame();
             world.runSchedule(Loop);
             world.runSchedule(AfterLoop);
