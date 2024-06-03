@@ -178,3 +178,8 @@ export function directEffect(signal, fn) {
     signal.addEffect(fn);
 }
 export const signals = new Signals();
+export function awaitIntoSignal(signal, promise) {
+    promise.then(v => {
+        signal.set(v);
+    });
+}

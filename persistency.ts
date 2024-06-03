@@ -1,4 +1,6 @@
+import { Circuit } from "./blocks.js";
 import { settings } from "./bsim.js";
+import { World } from "./engine/ecs.js";
 import { Value, signals } from "./jsml/signals.js";
 import { LANG } from "./lang.js";
 
@@ -37,26 +39,94 @@ export function loadSettings(): Settings {
     }
     const version = localStorage.getItem("settingsVersion");
     if (version === null) {
-        return {
-            graphics: {
-                blur: signals.value<"off"|"low"|"high">("low"),
-                gate_symbols: signals.value<"ansi"|"iec">("ansi"),
-            },
-            advanced: {
-                debug_display: signals.value(false),
-                perf_graph: signals.value(false),
-            }
-        }
+        return initSettings();
     }
-    const s = localStorage.getItem("settings") as string;
+    const data = localStorage.getItem("settings") as string;
     if (version === "1") {
-        return JSON.parse(s, (k: string, v: any) => {
-            if (typeof v === "string" || typeof v === "boolean" || typeof v === "number") {
-                return signals.value(v);
-            }
-
-            return v;
-        });
+        return loadSettingsV1(data);
     }
     throw new Error(`Trying to load settings... from the future???!?! (settingsVersion: ${version})`);
+}
+
+function initSettings(): Settings {
+    return {
+        graphics: {
+            blur: signals.value<"off"|"low"|"high">("low"),
+            gate_symbols: signals.value<"ansi"|"iec">("ansi"),
+        },
+        advanced: {
+            debug_display: signals.value(false),
+            perf_graph: signals.value(false),
+        }
+    }
+}
+
+function loadSettingsV1(data: string): Settings {
+    return JSON.parse(data, (k: string, v: any) => {
+        if (typeof v === "string" || typeof v === "boolean" || typeof v === "number") {
+            return signals.value(v);
+        }
+
+        return v;
+    });
+}
+
+
+export async function saveCircuitAsLink(circuit: Circuit): Promise<URL> {
+    const bin = circuit.serializeBinary();
+    var blob = new Blob([bin]);
+    const url = await new Promise<string>(r => {
+        const reader = new FileReader();
+        reader.onload = () => r(reader.result as string);
+        reader.readAsDataURL(blob);
+    });
+    return new URL("?d="+url.slice(url.indexOf(',') + 1), location.origin);
+}
+
+export function saveCircuitAsFileLink(circuit: Circuit, format: "binary" | "json"): string {
+    switch (format) {
+        case "binary":
+            const bin = circuit.serializeBinary();
+            var blob = new Blob([bin]);
+            return URL.createObjectURL(blob);
+        case "json":
+            const text = new TextEncoder().encode(circuit.serializeJSON());
+            var blob = new Blob([text]);
+            return URL.createObjectURL(blob);
+    }
+}
+
+export function loadCircuitFromLink(link: URL): Circuit {
+    const b64 = link.searchParams.get("d") as string;
+    const bin = new TextEncoder().encode(atob(b64));
+    return Circuit.deserializeBinary(bin);
+}
+
+export async function loadCircuitFromFile(file: File): Promise<Circuit> {
+    const bin = new Uint8Array(await file.arrayBuffer());
+    const type = sniffFileType(bin);
+    switch (type) {
+        case "binary":
+            return loadCircuitFromBinFile(bin);
+        case "json":
+            return loadCircuitFromJSONFile(bin);
+    }
+}
+
+function loadCircuitFromBinFile(input: Uint8Array): Circuit {
+    return Circuit.deserializeBinary(input);
+}
+
+function loadCircuitFromJSONFile(input: Uint8Array): Circuit {
+    return Circuit.deserializeJSON(new TextDecoder("utf-8").decode(input));
+}
+
+function sniffFileType(input: Uint8Array): "binary" | "json" {
+    const jsonMagicNumbers = "\r\n\t {";
+    for (const magicNumber of jsonMagicNumbers) {
+        if (input[0] === new TextEncoder().encode(magicNumber)[0]) {
+            return "json";
+        }
+    }
+    return "binary";
 }

@@ -38,7 +38,7 @@ export function debugViewPlugin(world: World) {
             currentPieGraph = parseInt(e.key);
         }
     });
-    world.system(Loop, _ => {
+    world.system(Loop, [], _ => {
         perfData.last_frame_start = time.ms();
         perfData.simulation = 0;
         perfData.render.total = 0;
@@ -48,7 +48,7 @@ export function debugViewPlugin(world: World) {
         perfData.render.blocks = 0;
         perfData.render.other = 0;
     });
-    world.system(AfterLoop, _ => {
+    world.system(AfterLoop, [], _ => {
         const ctx = overlayCanvas.context2d;
         if (settings.advanced.debug_display.get()) {
             if (lastFrameTimes.length > 60) {

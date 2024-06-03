@@ -1,5 +1,5 @@
 import { hoverState } from "../bsim.js";
-import { leftClick } from "../icons.js";
+import { leftClick, pan } from "../icons.js";
 import { JSML } from "../jsml/jsml.js";
 import { I18N, LANG } from "../lang.js";
 function key(ui, text, isMod = false) {
@@ -25,6 +25,8 @@ export function keyboardTipsPlugin(world) {
             tip(ui, ui => {
                 key(ui, () => I18N[LANG.get()].KEYBOARD.CTRL_PC, true);
                 key(ui, () => I18N[LANG.get()].KEYBOARD.META_MAC, true);
+                ui.text("+");
+                icon(ui, pan);
             }, ui => {
                 ui.text(() => I18N[LANG.get()].TIPS.MOVE_NODE);
             });

@@ -1,0 +1,57 @@
+.link-copy {
+    display: flex;
+    align-items: center;
+}
+
+.link-copy input {
+    font-size: 1em;
+    flex: 1;
+}
+
+.select-options {
+    display: flex;
+    margin-block: .2rem;
+}
+
+.select-options button {
+    margin: 0;
+    padding: .2rem;
+    border: none;
+    border-block: 1px solid var(--border-light);
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 1em;
+    font-family: inherit;
+    transition: var(--transition);
+    flex: 1;
+}
+
+.select-options button.target {
+    background-color: var(--accent-dark);
+    border: 1px solid var(--accent-light);
+}
+
+.select-options button:hover:not(.target) {
+    background-color: var(--border-light);
+}
+
+.select-options button:first-child {
+    border-radius: 4px 0 0 4px;
+}
+
+.select-options button:first-child:not(.target) {
+    border-left: 1px solid var(--border-light);
+}
+
+.select-options button:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.select-options button:last-child:not(.target) {
+    border-right: 1px solid var(--border-light);
+}
+
+.select-options button:not(.target) + button:not(.target) {
+    border-left: 1px solid var(--border-light);
+}

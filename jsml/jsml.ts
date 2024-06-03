@@ -156,7 +156,7 @@ class Tag implements UiElement {
     attributes: Map<string, string> = new Map();
     styles: Map<CSSProp, string | Signal<string>> = new Map();
     thenFns: ((element: HTMLElement) => void)[] = [];
-    classIfList: [string, Signal<boolean>][] = [];
+    classIfList: [string, Signal<boolean> | (() => boolean)][] = [];
 
     constructor (name: string, inner: UiConsumer) {
         this.name = name;
@@ -171,10 +171,6 @@ class Tag implements UiElement {
     }
 
     classIf(className: string, condition: Signal<boolean> | (() => boolean)) {
-        if (typeof condition === "function") {
-            this.classIfList.push([className, signals.computed(condition)]);
-            return this;
-        }
         this.classIfList.push([className, condition]);
         return this;
     }
@@ -202,10 +198,15 @@ class Tag implements UiElement {
     render(htmlElement: HTMLElement) {
         const ui = new Ui();
         const element = document.createElement(this.name);
+        const signalClassIfList: [string, Signal<boolean>][] = this.classIfList.map(([c, s]) => {
+            if (typeof s === "function") {
+                return [c, signals.computed(s)];
+            } else return [c, s];
+        });
         for (const className of this.classList) {
             element.classList.add(className);
         }
-        for (const classIfName of this.classIfList) {
+        for (const classIfName of signalClassIfList) {
             if (classIfName[1].get()) {
                 element.classList.add(classIfName[0]);
             }
@@ -233,10 +234,10 @@ class Tag implements UiElement {
         for (const thenFn of this.thenFns) {
             thenFn(element);
         }
-        if (calledSignals.length === 0 && dynStyles.size === 0) {
+        if (calledSignals.length === 0 && dynStyles.size === 0 && this.classIfList.length === 0) {
             return innerVNodes;
         } else {
-            return [new TagVNode(this.inner, calledSignals, element, innerVNodes, dynStyles, this.classIfList)];
+            return [new TagVNode(this.inner, calledSignals, element, innerVNodes, dynStyles, signalClassIfList)];
         }
     }
 
@@ -270,7 +271,7 @@ class TagVNode implements VNode {
     }
 
     registerSignals(): Signal<any>[] {
-        return this.signals.concat(...this.innerSignals, ...this.styles.values(), ...this.classIfList.map(v => v[1]));
+        return [...this.signals, ...this.innerSignals, ...this.styles.values(), ...this.classIfList.map(v => v[1])];
     }
 
     update(changed: Signal<any>) {

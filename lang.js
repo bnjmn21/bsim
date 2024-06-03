@@ -63,7 +63,24 @@ export const I18N = {
         TIPS: {
             MOVE_NODE: "Move node",
             DISCONNECT: "Disconnect cable from input",
-            INTERACT: "Interact"
+            INTERACT: "Interact",
+            MOVE_BLOCK: "Move block",
+        },
+        POPUPS: {
+            OPEN_FILE: "Open file",
+            CLEAR_WARING: "Your existing circuit will be permanently deleted! Consider saving this circuit before continuing.",
+            CLEAR_AND_CONTINUE: "Delete & Continue",
+            CANCEL: "Cancel",
+            ERROR_WHILE_UPLOADING: "An error occured!",
+            DOWNLOAD_AND_SHARE: "Download & Share",
+            COPY_LINK: "Copy link",
+            FORMAT: "Format",
+            BINARY: "Binary",
+            BINARY_NOTE: "Smaller file size (recommended)",
+            JSON: "JSON",
+            JSON_NOTE: "Human-readable file format",
+            FILE_NAME: "File name",
+            DOWNLOAD: "Download",
         }
     },
     de_de: {
@@ -129,7 +146,24 @@ export const I18N = {
         TIPS: {
             MOVE_NODE: "Knoten verschieben",
             DISCONNECT: "Kabel von Eingang trennen",
-            INTERACT: "Interargieren"
+            INTERACT: "Interargieren",
+            MOVE_BLOCK: "Block verschieben",
+        },
+        POPUPS: {
+            OPEN_FILE: "Datei öffnen",
+            CLEAR_WARING: "Dein aktueller Schaltkreis wird permanent gelöscht. Willst du wirklich fortfahren?",
+            CLEAR_AND_CONTINUE: "Löschen & Fortfahren",
+            CANCEL: "Abbrechen",
+            ERROR_WHILE_UPLOADING: "Ein Fehler ist aufgetreten!",
+            DOWNLOAD_AND_SHARE: "Herunterladen & Teilen",
+            COPY_LINK: "Link kopieren",
+            FORMAT: "Format",
+            BINARY: "Binär",
+            BINARY_NOTE: "Kleinere Datei (empfohlen)",
+            JSON: "JSON",
+            JSON_NOTE: "Bessere Lesbarkeit",
+            FILE_NAME: "Dateiname",
+            DOWNLOAD: "Herunterladen",
         }
     }
 };

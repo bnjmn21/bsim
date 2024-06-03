@@ -1,8 +1,8 @@
 import { Signal, directEffect, signals } from "./jsml/signals.js";
-import { Plugins, Time, World } from "./engine/ecs.js";
-import { Camera2d, CameraTransform, Canvas, CanvasObject, SharedTranslate, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
+import { Plugins, World } from "./engine/ecs.js";
+import { Camera2d, Canvas, CanvasObject, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
 import { I18N, LANG } from "./lang.js";
-import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode, IBlock, NodeOrValue, BlockDef, Hitbox, getBlocks, NodeRef, InputNodeRef, Delay, WireNode, Not } from "./blocks.js";
+import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode, BlockDef, Hitbox, NodeRef, Delay, WireNode, Not } from "./blocks.js";
 import { blockMenuPlugin } from "./ui/block_menu.js";
 import { titleBarPlugin } from "./ui/title_bar.js";
 import { debugViewPlugin, perfData, timed } from "./ui/debug_view.js";
@@ -12,7 +12,7 @@ import { JSML } from "./jsml/jsml.js";
 import { garbage } from "./icons.js";
 import { keyboardTipsPlugin } from "./ui/keyboard_tips.js";
 import { controlsPlugin } from "./ui/controls.js";
-import { loadSettings } from "./persistency.js";
+import { loadCircuitFromLink, loadSettings } from "./persistency.js";
 
 export const settings = loadSettings();
 effectAndInit(settings.graphics.blur, () => {
@@ -27,7 +27,7 @@ effectAndInit(settings.graphics.blur, () => {
         document.body.classList.remove("blur-low");
     }
 });
-export type BlockType = {staticData: BlockDef};
+export type BlockType = Function & {staticData: BlockDef};
 export const blocks: {gates: BlockType[], io: BlockType[], misc: BlockType[]} = {
     gates: [
         And,
@@ -69,7 +69,9 @@ export const keys = {
 export const hoverState = {
     wireNode: signals.value(false),
     inputNode: signals.value(false),
+    outputNode: signals.value(false),
     hitbox: signals.value(false),
+    block: signals.value(false),
 }
 
 export const controlState = {
@@ -80,7 +82,7 @@ export const controlState = {
 export function bsim(world: World) {
     const { time, Loop } = world.plugin(Plugins.time);
 
-    world.system(Loop, () => {
+    world.system(Loop, [], () => {
        overlayCanvas.context2d.clearRect(0, 0, overlayCanvas.size().x, overlayCanvas.size().y);
     });
 
@@ -88,11 +90,28 @@ export function bsim(world: World) {
     world.plugin(circuitPlugin);
     world.plugin(render2dPlugin);
     world.plugin(blockMenuPlugin);
-    world.plugin(titleBarPlugin);
     world.plugin(settingsPlugin);
     world.plugin(keyboardTipsPlugin);
     world.plugin(controlsPlugin);
+    
+    const camera = new Camera2d(canvas.size().div(new Vec2(2)).invert(), new Vec2(1));
+    world.plugin(titleBarPlugin, camera);
 
+    world.system(Loop, [], _ => {
+        if (hoverState.inputNode.get() || hoverState.outputNode.get()) {
+            document.body.style.cursor = "grab";
+        } else if (hoverState.hitbox.get()) {
+            document.body.style.cursor = "pointer";
+        } else if (dragging.inner !== null) {
+            document.body.style.cursor = "grabbing";
+        } else if (hoverState.block.get() || hoverState.wireNode.get()) {
+            document.body.style.cursor = "grab";
+        } else {
+            document.body.style.cursor = "initial";
+        }
+    });
+
+    let bin: Uint8Array;
     addEventListener("keydown", e => {
         if (e.key === "Control") {
             keys.ctrl.set(true);
@@ -127,9 +146,12 @@ export function bsim(world: World) {
             dragging.inner.block.pos.set(roundedPos);
         }
 
+        const hoveringBlock = getHoveringBlock(world, camera);
         hoverState.inputNode.set(!!getConnectedHoveringInputNode(world, camera));
-        hoverState.wireNode.set(getHoveringBlock(world, camera)?.block instanceof WireNode);
+        hoverState.wireNode.set(hoveringBlock?.block instanceof WireNode);
         hoverState.hitbox.set(!!getHoveringListener(world, camera));
+        hoverState.block.set((!!hoveringBlock) && !(hoveringBlock?.block instanceof WireNode));
+        hoverState.outputNode.set(!!getHoveringOutputNode(world, camera));
     });
 
     canvas.canvas.addEventListener("mousedown", e => {
@@ -249,43 +271,15 @@ export function bsim(world: World) {
         }
     });
 
-    const camera = new Camera2d(canvas.size().div(new Vec2(2)).invert(), new Vec2(1));
     camera.enableCanvasMouseControls(canvas.canvas, 2, true);
 
-    world.system(Loop, _ => {
+    world.system(Loop, [], _ => {
         perfData.render.bg = timed(time, () => {
             canvas.context2d.clearRect(0, 0, canvas.size().x, canvas.size().y);
             drawGrid(camera, canvas);
         })[0];
     });
 
-    world.system(Loop, [Block, CanvasObject, Transform], entities => {
-        perfData.render.blocks += timed(time, () => {
-            for (const e of entities) {
-                if (e.has(CanvasObject) && e.has(Transform)) {
-                    e(CanvasObject).render(canvas.context2d, e(Transform));
-                }
-            }
-        })[0];
-    });
-    world.system(Loop, [OutputNode, CanvasObject, Transform], entities => {
-        perfData.render.nodes += timed(time, () => {
-            for (const e of entities) {
-                if (e.has(CanvasObject) && e.has(Transform)) {
-                    e(CanvasObject).render(canvas.context2d, e(Transform));
-                }
-            }
-        })[0];
-    });
-    world.system(Loop, [InputNode, CanvasObject, Transform], entities => {
-        perfData.render.nodes += timed(time, () => {
-            for (const e of entities) {
-                if (e.has(CanvasObject) && e.has(Transform)) {
-                    e(CanvasObject).render(canvas.context2d, e(Transform));
-                }
-            }
-        })[0];
-    });
     world.system(Loop, InputNode, entities => {
         perfData.render.wires += timed(time, () => {
             for (const e of entities) {
@@ -331,7 +325,34 @@ export function bsim(world: World) {
             }
         })[0];
     });
-    world.system(Loop, _ => {
+    world.system(Loop, [Block, CanvasObject, Transform], entities => {
+        perfData.render.blocks += timed(time, () => {
+            for (const e of entities) {
+                if (e.has(CanvasObject) && e.has(Transform)) {
+                    e(CanvasObject).render(canvas.context2d, e(Transform));
+                }
+            }
+        })[0];
+    });
+    world.system(Loop, [OutputNode, CanvasObject, Transform], entities => {
+        perfData.render.nodes += timed(time, () => {
+            for (const e of entities) {
+                if (e.has(CanvasObject) && e.has(Transform)) {
+                    e(CanvasObject).render(canvas.context2d, e(Transform));
+                }
+            }
+        })[0];
+    });
+    world.system(Loop, [InputNode, CanvasObject, Transform], entities => {
+        perfData.render.nodes += timed(time, () => {
+            for (const e of entities) {
+                if (e.has(CanvasObject) && e.has(Transform)) {
+                    e(CanvasObject).render(canvas.context2d, e(Transform));
+                }
+            }
+        })[0];
+    });
+    world.system(Loop, [], _ => {
         perfData.render.other += timed(time, () => {
             if (dragging.inner?.type === "new") {
                 const ctx = overlayCanvas.context2d;
@@ -347,7 +368,7 @@ export function bsim(world: World) {
             }
         })[0];
     });
-    world.system(Loop, _ => {
+    world.system(Loop, [], _ => {
         perfData.render.other += timed(time, () => {
             if (dragging.inner?.type === "wire") {
                 let connect = false;
@@ -366,11 +387,9 @@ export function bsim(world: World) {
                 camera.toTransform().applyTransforms(ctx);
                 if (connect) {
                     ctx.strokeStyle = "#3f3fff";
-                    //ctx.setLineDash([55, 20]);
                     ctx.lineWidth = GRID_SIZE / 2;
                 } else {
                     ctx.strokeStyle = "#ffffff7f";
-                    //ctx.setLineDash([45, 30]);
                     ctx.lineWidth = GRID_SIZE / 3;
                 }
                 ctx.lineCap = "round";
@@ -428,7 +447,7 @@ export function bsim(world: World) {
 
 
     let timeSinceTick = 0;
-    world.system(Loop, _ => {
+    world.system(Loop, [], _ => {
         perfData.simulation += timed(time, () => {
             if (controlState.playing.get()) {
                 let ticked = false;
@@ -444,6 +463,16 @@ export function bsim(world: World) {
             }
         })[0];
     });
+
+    if (new URL(location.href).searchParams.has("d")) {
+        try {
+            const circuit = loadCircuitFromLink(new URL(location.href))
+            if (circuit.name) {
+                circuitName.set(circuit.name);
+            }
+            circuit.load(world, camera, new Vec2(0, 0));
+        } catch {}
+    }
 }
 
 function drawGrid(camera: Camera2d, canvas: Canvas) {

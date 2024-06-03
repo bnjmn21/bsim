@@ -10,7 +10,7 @@
     --bg-light: #333;
     --bg-dark:  #111;
     --fg:       #ddd;
-    --fg-dark:  #777;
+    --fg-dark:  #ddd7;
 
     --border:       #444;
     --border-light: #555;
@@ -36,11 +36,23 @@
 body.blur-off {
     --window-backdrop-filter: none;
     --glass-backdrop-filter: none;
+
+    --glass:              color-mix(in srgb, color-mix(in srgb, var(--bg) 95%, var(--fg)) 100%, transparent);
+    --glass-border:       color-mix(in srgb, color-mix(in srgb, var(--bg) 80%, var(--fg)) 100%, transparent);
+    --glass-light:        color-mix(in srgb, color-mix(in srgb, var(--bg) 80%, var(--fg)) 100%, transparent);
+    --glass-light-border: color-mix(in srgb, color-mix(in srgb, var(--bg) 60%, var(--fg)) 100%, transparent);
 }
 
 body.blur-low {
     --window-backdrop-filter: none;
     --glass-backdrop-filter: blur(5px);
+    --glass-transparency: 70%;
+
+    
+    --glass:              color-mix(in srgb, color-mix(in srgb, var(--bg) 95%, var(--fg)) var(--glass-transparency), transparent);
+    --glass-border:       color-mix(in srgb, color-mix(in srgb, var(--bg) 80%, var(--fg)) var(--glass-transparency), transparent);
+    --glass-light:        color-mix(in srgb, color-mix(in srgb, var(--bg) 80%, var(--fg)) var(--glass-transparency), transparent);
+    --glass-light-border: color-mix(in srgb, color-mix(in srgb, var(--bg) 60%, var(--fg)) var(--glass-transparency), transparent);
 }
 
 body {
@@ -60,6 +72,54 @@ body {
 
 .special {
     color: var(--accent-light);
+}
+
+.warning {
+    color: #f3ca00;
+}
+
+.error {
+    color: #f16868;
+}
+
+.info {
+    color: var(--fg-dark);
+    font-size: .75em;
+}
+
+button,
+.button {
+    margin: .2rem;
+    padding: .2rem;
+    border: 1px solid var(--border-light);
+    background: transparent;
+    border-radius: 4px;
+    color: inherit;
+    font-size: 1em;
+    font-family: inherit;
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+button.primary,
+.button.primary {
+    background: var(--accent-dark);
+    border: 1px solid var(--accent-light);
+}
+
+button:hover,
+.button:hover {
+    background: var(--border-light);
+}
+
+button.primary:hover,
+.button.primary:hover {
+    background: var(--accent-light);
+}
+
+.primary-button-centerer {
+    display: flex;
+    justify-content: center;
 }
 
 #main-canvas {
@@ -87,14 +147,15 @@ body {
     background: none;
     border: none;
     box-sizing: content-box;
-    border-radius: .2rem;
+    border-radius: .2em;
     transition: all var(--transition);
     cursor: pointer;
-    padding: .2rem;
+    padding: .2em;
     height: 1em;
-    margin-inline: .2rem;
+    margin-inline: .2em;
     flex: 0 0 1em;
     font-size: 1em;
+    font-family: inherit;
 }
 
 .icon-btn:hover {
@@ -108,16 +169,27 @@ body {
     width: 1em;
 }
 
+.spinner {
+    height: 1em;
+    width: 1em;
+    color: var(--fg);
+}
+
 .icon.focus {
     fill: var(--accent-light);
 }
 
+input[type=text] {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: inherit;
+    font-family: inherit;
+    color: var(--fg);
+}
 
-.dom2d-element {
-    position: absolute;
-    display: block;
-    width: 0;
-    height: 0;
+input[type=text][disabled] {
+    color: var(--fg-dark);
 }
 
 #hidden {
@@ -171,7 +243,7 @@ body {
 }
 
 #keyboard-tips-container {
-    display: inline-block;
+    display: flex;
     position: absolute;
     bottom: 0;
     left: 0;
@@ -239,4 +311,8 @@ body {
     font-size: 1rem;
     width: 5.5rem;
     text-align: end;
+}
+
+#controls input[type=range] {
+    cursor: ew-resize;
 }

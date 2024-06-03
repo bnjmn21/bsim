@@ -120,6 +120,7 @@ export class World {
 
     schedule(): Reference<null, "schedule", {}> {
         const reference = this.scheduleRegistry.push(null, () => ({}));
+        this.systems[reference.data.index] = [];
         return reference;
     }
 

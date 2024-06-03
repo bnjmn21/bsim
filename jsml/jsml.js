@@ -128,10 +128,6 @@ class Tag {
         return this;
     }
     classIf(className, condition) {
-        if (typeof condition === "function") {
-            this.classIfList.push([className, signals.computed(condition)]);
-            return this;
-        }
         this.classIfList.push([className, condition]);
         return this;
     }
@@ -154,10 +150,17 @@ class Tag {
     render(htmlElement) {
         const ui = new Ui();
         const element = document.createElement(this.name);
+        const signalClassIfList = this.classIfList.map(([c, s]) => {
+            if (typeof s === "function") {
+                return [c, signals.computed(s)];
+            }
+            else
+                return [c, s];
+        });
         for (const className of this.classList) {
             element.classList.add(className);
         }
-        for (const classIfName of this.classIfList) {
+        for (const classIfName of signalClassIfList) {
             if (classIfName[1].get()) {
                 element.classList.add(classIfName[0]);
             }
@@ -186,11 +189,11 @@ class Tag {
         for (const thenFn of this.thenFns) {
             thenFn(element);
         }
-        if (calledSignals.length === 0 && dynStyles.size === 0) {
+        if (calledSignals.length === 0 && dynStyles.size === 0 && this.classIfList.length === 0) {
             return innerVNodes;
         }
         else {
-            return [new TagVNode(this.inner, calledSignals, element, innerVNodes, dynStyles, this.classIfList)];
+            return [new TagVNode(this.inner, calledSignals, element, innerVNodes, dynStyles, signalClassIfList)];
         }
     }
     click(callback) {
@@ -219,7 +222,7 @@ class TagVNode {
         }
     }
     registerSignals() {
-        return this.signals.concat(...this.innerSignals, ...this.styles.values(), ...this.classIfList.map(v => v[1]));
+        return [...this.signals, ...this.innerSignals, ...this.styles.values(), ...this.classIfList.map(v => v[1])];
     }
     update(changed) {
         let reregister = false;

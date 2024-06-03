@@ -351,7 +351,7 @@ export class CameraTransform {
 
 export function render2dPlugin(world: World) {
     const {Loop} = world.plugin(Plugins.default);
-    world.system<(typeof Transform) | (typeof CameraTransform)>(Loop, Transform, CameraTransform, entities => {
+    world.system(Loop, [Transform, CameraTransform], entities => {
         for (const entity of entities) {
             const transform = entity(Transform);
             const cameraTransform = entity(CameraTransform);

@@ -1,5 +1,6 @@
-import { settings } from "./bsim.js";
+import { blocks, circuitName, settings } from "./bsim.js";
 import { GRID_SIZE } from "./constants.js";
+import { Reader, Writer } from "./engine/binary.js";
 import { RGB, color_mix } from "./engine/colors.js";
 import { Plugins } from "./engine/ecs.js";
 import { CameraTransform, CanvasObject, SharedTranslate, Transform, Vec2 } from "./engine/engine.js";
@@ -69,6 +70,9 @@ export class And {
             ctx.fillText("&", 0, 0);
         }
     }
+    serialize() {
+        return {};
+    }
 }
 export class Or {
     static staticData = {
@@ -122,6 +126,9 @@ export class Or {
             ctx.fillStyle = OUTLINE_COLOR(COLORS.OR).toCSS();
             ctx.fillText("≥1", 0, 0);
         }
+    }
+    serialize() {
+        return {};
     }
 }
 export class Xor {
@@ -182,6 +189,9 @@ export class Xor {
             ctx.fillText("=1", 0, 0);
         }
     }
+    serialize() {
+        return {};
+    }
 }
 export class Not {
     static staticData = {
@@ -216,6 +226,9 @@ export class Not {
         ctx.fill();
         ctx.stroke();
     }
+    serialize() {
+        return {};
+    }
 }
 export class Toggle {
     static staticData = {
@@ -224,7 +237,8 @@ export class Toggle {
         center: new Vec2(GRID_SIZE / 2, 0),
         iconSize: GRID_SIZE * 1.5 + 8,
         name: "TOGGLE",
-        hitbox: { type: "rect", pos: new Vec2(0, -GRID_SIZE / 2), size: new Vec2(GRID_SIZE) }
+        hitbox: { type: "rect", pos: new Vec2(0, -GRID_SIZE / 2), size: new Vec2(GRID_SIZE) },
+        deserialize: (d) => new Toggle(d),
     };
     data = Toggle.staticData;
     state;
@@ -262,6 +276,9 @@ export class Toggle {
         ctx.fillRect(0, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
         ctx.strokeRect(0, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
     }
+    serialize() {
+        return this.state;
+    }
 }
 export class LED {
     static staticData = {
@@ -270,7 +287,8 @@ export class LED {
         center: new Vec2(GRID_SIZE / 2, 0),
         iconSize: GRID_SIZE * 1.5 + 8,
         name: "LED",
-        hitbox: { type: "circle", center: new Vec2(GRID_SIZE / 2, 0), radius: GRID_SIZE }
+        hitbox: { type: "circle", center: new Vec2(GRID_SIZE / 2, 0), radius: GRID_SIZE / 2 },
+        deserialize: (d) => new LED(d),
     };
     data = LED.staticData;
     state;
@@ -303,6 +321,9 @@ export class LED {
         ctx.fill();
         ctx.stroke();
     }
+    serialize() {
+        return this.state;
+    }
 }
 export class Delay {
     static staticData = {
@@ -311,7 +332,7 @@ export class Delay {
         center: new Vec2(-GRID_SIZE / 2, 0),
         iconSize: GRID_SIZE * 1.5,
         name: "DELAY",
-        hitbox: { type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2 * GRID_SIZE) }
+        hitbox: { type: "rect", pos: new Vec2(-GRID_SIZE), size: new Vec2(2 * GRID_SIZE) },
     };
     data = And.staticData;
     inputNodes = [new Vec2(-GRID_SIZE, 0)];
@@ -339,6 +360,7 @@ export class Delay {
         ctx.fillStyle = OUTLINE_COLOR(COLORS.DELAY).toCSS();
         ctx.fillText("t", -GRID_SIZE / 2, 0);
     }
+    serialize() { }
 }
 export class WireNode {
     static staticData = {
@@ -347,7 +369,7 @@ export class WireNode {
         center: new Vec2(0, 0),
         iconSize: GRID_SIZE,
         name: "NODE",
-        hitbox: { type: "circle", center: new Vec2(0), radius: GRID_SIZE / 2 },
+        hitbox: { type: "circle", center: new Vec2(0), radius: GRID_SIZE / 4 },
         menuRender: (ctx) => {
             ctx.lineCap = "butt";
             ctx.lineJoin = "miter";
@@ -360,7 +382,7 @@ export class WireNode {
             ctx.stroke();
         },
     };
-    data = And.staticData;
+    data = WireNode.staticData;
     inputNodes = [new Vec2(0, 0)];
     outputNodes = [new Vec2(0, 0)];
     listeners = [];
@@ -371,6 +393,9 @@ export class WireNode {
     }
     tick(input) { }
     render(ctx) { }
+    serialize() {
+        return {};
+    }
 }
 export class Block {
     inputs;
@@ -576,13 +601,251 @@ export function circuitPlugin(world) {
         }
     });
 }
-let currentId = 0;
-export class BlockID {
-    id;
-    constructor() {
-        this.id = currentId++;
+export class CircuitBlock {
+    block;
+    pos;
+    inputs;
+    constructor(block, pos, inputs) {
+        this.block = block;
+        this.pos = pos;
+        this.inputs = inputs;
     }
 }
-export function getBlocks(world) {
-    return new Map(world.getEntities([BlockID, Block]).map(e => [e(BlockID).id, e(Block)]));
+export class Circuit {
+    blocks = [];
+    name;
+    constructor(blocks, name) {
+        this.blocks = blocks;
+        this.name = name;
+    }
+    static fromBlocks(blocks, name, outerConnections = "throw") {
+        const circuit = new Circuit([], name);
+        for (const block of blocks) {
+            const inputs = [];
+            for (const input of block.inputs) {
+                if (typeof input === "boolean") {
+                    inputs.push(input);
+                }
+                else {
+                    const block = blocks.findIndex(v => v === input.block);
+                    if (block === -1) {
+                        if (outerConnections === "remove") {
+                            inputs.push(false);
+                        }
+                        else if (outerConnections === "throw") {
+                            throw new Error("Outer connection found while exporting circuit. Use outerConnections: 'remove' to ignore");
+                        }
+                    }
+                    else {
+                        inputs.push({
+                            block,
+                            output: input.outputId,
+                        });
+                    }
+                }
+            }
+            circuit.blocks.push(new CircuitBlock(block.block, block.pos.pos.clone(), inputs));
+        }
+        return circuit;
+    }
+    static saveCircuit(world) {
+        return Circuit.fromBlocks(getBlocks(world), circuitName.get(), "throw");
+    }
+    load(world, camera, pos) {
+        const newBlocks = [];
+        for (const block of this.blocks) {
+            const inputs = [];
+            for (const input of block.inputs) {
+                if (typeof input === "boolean") {
+                    inputs.push(input);
+                }
+                else {
+                    inputs.push(false);
+                }
+            }
+            const newBlock = new Block(inputs, block.block, block.pos.add(pos));
+            newBlock.render(world, camera);
+            newBlocks.push(newBlock);
+        }
+        for (const [block, newBlock] of this.blocks.map((v, i) => [v, newBlocks[i]])) {
+            for (const [i, input] of block.inputs.entries()) {
+                if (typeof input !== "boolean") {
+                    newBlock.inputs[i] = {
+                        block: newBlocks[input.block],
+                        outputId: input.output,
+                    };
+                }
+            }
+        }
+    }
+    serializeJSON() {
+        return JSON.stringify({ version: 1, blocks: this.blocks, name: this.name }, (k, v) => {
+            if (v instanceof CircuitBlock) {
+                return {
+                    block: getBlockId(v.block),
+                    pos: v.pos,
+                    inputs: v.inputs,
+                    data: v.block.serialize()
+                };
+            }
+            return v;
+        });
+    }
+    static deserializeJSON(d) {
+        const json = JSON.parse(d);
+        const name = "name" in json ? json.name : undefined;
+        const blocks = expect(json.blocks, Array).map(v => {
+            const block = expect(v, "object");
+            const type = fromBlockId(expectField(block, "block", "string"), "data" in block ? block.data : undefined);
+            const posField = expectField(block, "pos", "object");
+            const pos = new Vec2(expectField(posField, "x", "number"), expectField(posField, "y", "number"));
+            const inputs = expectField(block, "inputs", Array).map(v => {
+                if (typeof v === "boolean") {
+                    return v;
+                }
+                else {
+                    const input = expect(v, "object");
+                    return {
+                        block: expectField(input, "block", "number"),
+                        output: expectField(input, "output", "number"),
+                    };
+                }
+            });
+            return new CircuitBlock(type, pos, inputs);
+        });
+        return new Circuit(blocks, name);
+    }
+    serializeBinary() {
+        const VERSION = 1; // Version must not be: 9, 10, 13, 32, 123 as these are the magic numbers for detecting json files.
+        const w = new Writer();
+        w.i32(VERSION);
+        w.bool(this.name !== undefined);
+        if (this.name !== undefined) {
+            w.string(this.name);
+        }
+        ;
+        const blocks = [];
+        for (const block of this.blocks) {
+            const bw = new Writer();
+            bw.string(getBlockId(block.block));
+            bw.f32(block.pos.x);
+            bw.f32(block.pos.y);
+            const inputs = [];
+            for (const input of block.inputs) {
+                const iw = new Writer();
+                iw.bool(typeof input === "boolean");
+                if (typeof input === "boolean") {
+                    iw.bool(input);
+                }
+                else {
+                    iw.i32(input.block);
+                    iw.i32(input.output);
+                }
+                inputs.push(iw);
+            }
+            bw.array(inputs);
+            bw.string(JSON.stringify(block.block.serialize()));
+            blocks.push(bw);
+        }
+        w.array(blocks);
+        return w.intoUint8Array();
+    }
+    static deserializeBinary(d) {
+        const r = new Reader(d);
+        const version = r.i32();
+        if (version === 1) {
+            let name;
+            const hasName = r.bool();
+            if (hasName) {
+                name = r.string();
+            }
+            const blocks = [];
+            r.array(br => {
+                const blockId = br.string();
+                const pos = new Vec2(br.f32(), br.f32());
+                const inputs = [];
+                br.array(ir => {
+                    const isBool = ir.bool();
+                    if (isBool) {
+                        inputs.push(ir.bool());
+                    }
+                    else {
+                        inputs.push({
+                            block: ir.i32(),
+                            output: ir.i32(),
+                        });
+                    }
+                });
+                const data = JSON.parse(br.string());
+                blocks.push(new CircuitBlock(fromBlockId(blockId, data), pos, inputs));
+            });
+            return new Circuit(blocks, name);
+        }
+        throw new Error("Invalid circuit binary version");
+    }
+}
+function getBlocks(world) {
+    return world.getEntities(Block).map(v => v(Block));
+}
+export function isEmpty(world) {
+    return getBlocks(world).length === 0;
+}
+export function deleteAllBlocks(world) {
+    getBlocks(world).forEach(b => b.remove(world));
+}
+function getBlockId(b) {
+    for (const [catName, category] of Object.entries(blocks)) {
+        for (const block of category.values()) {
+            if (b instanceof block) {
+                return `${catName}:${block.name}`;
+            }
+        }
+    }
+    throw new Error("Could not serialize block. The block must be part of the blocks object in bsim.ts");
+}
+function fromBlockId(id, data) {
+    for (const [catName, category] of Object.entries(blocks)) {
+        for (const block of category.values()) {
+            if (id === `${catName}:${block.name}`) {
+                if (block.staticData.deserialize) {
+                    return block.staticData.deserialize(data);
+                }
+                else {
+                    return block.staticData.default();
+                }
+            }
+        }
+    }
+    throw new Error(`Invalid block id (got: ${id})`);
+}
+function expect(v, t) {
+    if (typeof t === "string") {
+        if (typeof v === t) {
+            return v;
+        }
+        else {
+            throw new Error(`Invalid type, expected ${t}, found ${typeof v}`);
+        }
+    }
+    else {
+        if (v instanceof t) {
+            return v;
+        }
+        else {
+            throw new Error(`Invalid type, expected ${t.name}`);
+        }
+    }
+}
+function expectField(v, f, t) {
+    if (f in v) {
+        if (t === "any") {
+            return v[f];
+        }
+        else {
+            return expect(v[f], t);
+        }
+    }
+    else {
+        throw new Error(`Invalid type, expected field ${f}`);
+    }
 }

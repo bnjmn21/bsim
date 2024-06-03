@@ -219,3 +219,9 @@ export function directEffect<T>(signal: Signal<T>, fn: () => void) {
 }
 
 export const signals = new Signals();
+
+export function awaitIntoSignal<T>(signal: Value<T>, promise: Promise<T>) {
+    promise.then(v => {
+        signal.set(v);
+    });
+}

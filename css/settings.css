@@ -9,6 +9,7 @@
     opacity: 0;
     align-items: center;
     justify-content: center;
+    transform: translate(0, -10%);
 }
 
 #settings-container.show {
@@ -16,6 +17,7 @@
     background: var(--window-backdrop-color);
     backdrop-filter: var(--window-backdrop-filter);
     opacity: 1;
+    transform: translate(0, 0);
 }
 
 #settings-window {

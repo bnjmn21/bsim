@@ -93,6 +93,7 @@ export class World {
     }
     schedule() {
         const reference = this.scheduleRegistry.push(null, () => ({}));
+        this.systems[reference.data.index] = [];
         return reference;
     }
     system(schedule, deepComponents, system) {
