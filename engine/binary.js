@@ -1,4 +1,4 @@
-import { iterify, pairsExact } from "./itertools.js";
+import { blocks, blocksExact, blocksFill, collect, flat, iterify, join, map, pairsExact, takeWhile } from "./itertools.js";
 /**
  * An Object for creating binary files.
  * Uses Big Endian encoding.
@@ -265,4 +265,47 @@ export class Reader {
     indexableMap() {
         return new Map(pairsExact(iterify(this.indexableArray())));
     }
+}
+const B64URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+/**
+ * Encodes an `Uint8Array` into Base64 using the URL-safe alphabet.
+ *
+ * Based on: https://datatracker.ietf.org/doc/html/rfc4648
+ */
+export function b64Encode(array) {
+    const blocksOf3 = blocks(iterify(array), 3);
+    const unpadded = join(map(blocksOf3, bytes => {
+        const bin = join(map(bytes, v => v.toString(2).padStart(8, "0")));
+        const sextets = map(blocksFill(iterify(bin), 6, "0"), v => parseInt(join(v), 2));
+        return join(map(sextets, v => B64URL_ALPHABET[v]));
+    }));
+    const paddedB64Blocks = blocksFill(iterify(unpadded), 4, "=");
+    return join(flat(paddedB64Blocks));
+}
+/**
+ * Decodes a Base64-string into an `Uint8Array` using the URL-safe alphabet.
+ *
+ * Based on: https://datatracker.ietf.org/doc/html/rfc4648
+ */
+export function b64Decode(b64) {
+    const iter = iterify(b64);
+    const blocksOf4 = map(blocksExact(iter, 4), v => {
+        const unpadded = join(takeWhile(v, v => v !== "="));
+        const bits = join(map(iterify(unpadded), v => B64URL_ALPHABET.indexOf(v).toString(2).padStart(6, "0")));
+        const bytes = takeWhile(map(blocks(iterify(bits), 8), v => collect(v)), v => v.length === 8);
+        return map(bytes, v => parseInt(join(iterify(v)), 2));
+    });
+    return new Uint8Array(flat(blocksOf4));
+}
+/**
+ * A simple and fast hasher for strings that is *NOT* cryptographically safe.
+ */
+export function fastHash(str) {
+    let hash = 0;
+    for (let i = 0, len = str.length; i < len; i++) {
+        let chr = str.charCodeAt(i);
+        hash = (hash << 5) - hash + chr;
+        hash |= 0; // Convert to 32bit integer
+    }
+    return hash;
 }

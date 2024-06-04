@@ -13,6 +13,7 @@ import { garbage } from "./icons.js";
 import { keyboardTipsPlugin } from "./ui/keyboard_tips.js";
 import { controlsPlugin } from "./ui/controls.js";
 import { loadCircuitFromLink, loadSettings } from "./persistency.js";
+import { b64Decode, b64Encode } from "./engine/binary.js";
 
 export const settings = loadSettings();
 effectAndInit(settings.graphics.blur, () => {
@@ -136,7 +137,7 @@ export function bsim(world: World) {
         }
     });
 
-    addEventListener("mousemove", e => {
+    addEventListener("pointermove", e => {
         const unroundedPos = camera.mouseWorldCoords();
         const roundedPos = new Vec2(Math.round(unroundedPos.x / GRID_SIZE) * GRID_SIZE, Math.round(unroundedPos.y / GRID_SIZE) * GRID_SIZE);
         if (dragging.inner?.type === "new") {
@@ -154,7 +155,7 @@ export function bsim(world: World) {
         hoverState.outputNode.set(!!getHoveringOutputNode(world, camera));
     });
 
-    canvas.canvas.addEventListener("mousedown", e => {
+    canvas.canvas.addEventListener("pointerdown", e => {
         if (e.button === 0) {
             if (keys.alt.get() && (!(keys.ctrl.get() || keys.meta.get()))) {
                 const hoveringInputNode = getConnectedHoveringInputNode(world, camera);
@@ -197,7 +198,7 @@ export function bsim(world: World) {
         }
     });
 
-    addEventListener("mouseup", e => {
+    addEventListener("pointerup", e => {
         if (dragging.inner?.type === "new") {
             if (dragging.inner.block) {
                 if (e.target !== canvas.canvas) {
@@ -411,7 +412,7 @@ export function bsim(world: World) {
         })[0];
     });
 
-    addEventListener("mousemove", e => {
+    addEventListener("pointermove", e => {
         if (e.target === document.getElementById("block-menu") && (dragging.inner?.type === "move" || dragging.inner?.type === "new")) {
             mouseTooltip.set("delete");
         } else {
@@ -465,13 +466,11 @@ export function bsim(world: World) {
     });
 
     if (new URL(location.href).searchParams.has("d")) {
-        try {
-            const circuit = loadCircuitFromLink(new URL(location.href))
-            if (circuit.name) {
-                circuitName.set(circuit.name);
-            }
-            circuit.load(world, camera, new Vec2(0, 0));
-        } catch {}
+        const circuit = loadCircuitFromLink(new URL(location.href))
+        if (circuit.name) {
+            circuitName.set(circuit.name);
+        }
+        circuit.load(world, camera, new Vec2(0, 0));
     }
 }
 

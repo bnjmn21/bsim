@@ -1,4 +1,5 @@
 import { Circuit } from "./blocks.js";
+import { b64Decode, b64Encode } from "./engine/binary.js";
 import { Value, signals } from "./jsml/signals.js";
 import { LANG } from "./lang.js";
 export function saveSettings(s) {
@@ -52,15 +53,9 @@ function loadSettingsV1(data) {
         return v;
     });
 }
-export async function saveCircuitAsLink(circuit) {
+export function saveCircuitAsLink(circuit) {
     const bin = circuit.serializeBinary();
-    var blob = new Blob([bin]);
-    const url = await new Promise(r => {
-        const reader = new FileReader();
-        reader.onload = () => r(reader.result);
-        reader.readAsDataURL(blob);
-    });
-    return new URL("?d=" + url.slice(url.indexOf(',') + 1), location.origin);
+    return new URL("?d=" + b64Encode(bin), location.origin);
 }
 export function saveCircuitAsFileLink(circuit, format) {
     switch (format) {
@@ -76,7 +71,7 @@ export function saveCircuitAsFileLink(circuit, format) {
 }
 export function loadCircuitFromLink(link) {
     const b64 = link.searchParams.get("d");
-    const bin = new TextEncoder().encode(atob(b64));
+    const bin = b64Decode(b64);
     return Circuit.deserializeBinary(bin);
 }
 export async function loadCircuitFromFile(file) {

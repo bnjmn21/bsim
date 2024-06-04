@@ -44,7 +44,11 @@ export function titleBarPlugin(world: World, camera: Camera2d) {
     let uploadFile: null | File = null;
     
     const showFileDownload = signals.value(false);
-    const circuitLink = signals.value("");
+    const circuitLink = signals.computed(() => {
+        circuitName.get();
+        showFileDownload.get();
+        return saveCircuitAsLink(Circuit.saveCircuit(world)).href;
+    });
     const downloadLink = signals.value("");
     const fileName = signals.value(circuitName.get());
     directEffect(circuitName, () => {
@@ -68,9 +72,10 @@ export function titleBarPlugin(world: World, camera: Camera2d) {
             ui.p(ui => ui.text("/")).class("slash");
             ui.div(ui => {
                 if (!editingName.get()) {
-                    ui.p(ui => ui.text(() => `${circuitName.get()}`)).class("sub-section");
+                    ui.p(ui => ui.text(() => `${circuitName.get()}`))
+                        .class("sub-section")
+                        .style("whiteSpace", "preserve");
                 } else {
-                    editFieldWidth.setDirty();
                     ui.tag("input", () => {})
                         .attribute("type", "text")
                         .attribute("value", tempName)
@@ -104,12 +109,12 @@ export function titleBarPlugin(world: World, camera: Camera2d) {
             })
                 .class("icon-btn")
                 .click(() => {
-                    editingName.set(!editingName.get());
-                    if (editingName.get()) {
+                    if (!editingName.get()) {
                         tempName = circuitName.get();
                     } else {
                         circuitName.set(tempName);
                     }
+                    editingName.set(!editingName.get());
                 })
                 .then(e => {
                     editBtn = e;
@@ -237,7 +242,6 @@ export function titleBarPlugin(world: World, camera: Camera2d) {
         showFileDownload.get();
         ui.tag("hr", _ => {});
         ui.h4(ui => ui.text(I18N[LANG.get()].POPUPS.COPY_LINK));
-        awaitIntoSignal(circuitLink, (async () => (await saveCircuitAsLink(Circuit.saveCircuit(world))).href)());
         copyLink(ui, circuitLink);
         ui.tag("hr", _ => {});
         ui.h4(ui => ui.text(I18N[LANG.get()].POPUPS.DOWNLOAD));
