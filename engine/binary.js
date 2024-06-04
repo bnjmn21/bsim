@@ -299,6 +299,8 @@ export function b64Decode(b64) {
 }
 /**
  * A simple and fast hasher for strings that is *NOT* cryptographically safe.
+ *
+ * Originally from the Java standard library, adapted to JavaScript by
  */
 export function fastHash(str) {
     let hash = 0;
