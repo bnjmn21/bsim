@@ -1,3 +1,4 @@
+import { flat, iterify, join, map } from "../engine/itertools.js";
 import { signals, directEffect } from "./signals.js";
 function unreachable() {
     throw new Error("Entered unreachable code.");
@@ -140,7 +141,7 @@ class Tag {
         return this;
     }
     style(name, value) {
-        this.styles.set(name, value);
+        this.styles.set(join(flat(map(iterify(name), v => v === v.toUpperCase() ? iterify(["-", v]) : iterify(v)))), value);
         return this;
     }
     then(fn) {

@@ -1,5 +1,8 @@
 export function iterify(iterableOrIterator) {
-    if ("next" in iterableOrIterator) {
+    if (typeof iterableOrIterator === "string") {
+        return iterableOrIterator[Symbol.iterator]();
+    }
+    else if ("next" in iterableOrIterator) {
         return iterableOrIterator;
     }
     else {
@@ -9,10 +12,102 @@ export function iterify(iterableOrIterator) {
 export function collect(iter) {
     return [...iterify(iter)];
 }
+export function join(iter) {
+    return collect(iter).join("");
+}
+export function* map(iter, fn) {
+    let i = 0;
+    while (true) {
+        const next = iter.next();
+        if (next.done) {
+            break;
+        }
+        yield fn(next.value, i);
+        i++;
+    }
+}
+export function* mapIter(iter, fn, ...args) {
+    yield* map(iter, v => fn(v, ...args));
+}
+export function* flat(iter) {
+    while (true) {
+        const next = iter.next();
+        if (next.done) {
+            break;
+        }
+        if (typeof next.value === "object" && next.value !== null && Symbol.iterator in next.value) {
+            yield* flat(iterify(next.value));
+        }
+        else {
+            yield next.value;
+        }
+    }
+}
+export function* fill(iter, minSize, fill) {
+    let i = 0;
+    while (true) {
+        const next = iter.next();
+        if (next.done) {
+            break;
+        }
+        yield next.value;
+        i++;
+    }
+    for (; i < minSize; i++) {
+        yield fill;
+    }
+}
+export function* fillFn(iter, minSize, fill) {
+    let i = 0;
+    while (true) {
+        const next = iter.next();
+        if (next.done) {
+            break;
+        }
+        yield next.value;
+        i++;
+    }
+    for (; i < minSize; i++) {
+        yield fill(i);
+    }
+}
+export function* fillExact(iter, exactSize, fill) {
+    let i = 0;
+    while (true) {
+        const next = iter.next();
+        if (next.done) {
+            break;
+        }
+        if (i >= exactSize) {
+            throw new Error("Iterator is too large");
+        }
+        yield next.value;
+        i++;
+    }
+    for (; i < exactSize; i++) {
+        yield fill;
+    }
+}
+export function* fillExactFn(iter, exactSize, fill) {
+    let i = 0;
+    while (true) {
+        const next = iter.next();
+        if (next.done) {
+            break;
+        }
+        if (i >= exactSize) {
+            throw new Error("Iterator is too large");
+        }
+        yield next.value;
+        i++;
+    }
+    for (; i < exactSize; i++) {
+        yield fill(i);
+    }
+}
 export function* take(iter, amount) {
-    const _iter = iterify(iter);
     for (let i = 0; i < amount; i++) {
-        const next = _iter.next();
+        const next = iter.next();
         if (next.done) {
             return;
         }
@@ -20,9 +115,8 @@ export function* take(iter, amount) {
     }
 }
 export function* takeExact(iter, amount) {
-    const _iter = iterify(iter);
     for (let i = 0; i < amount; i++) {
-        const next = _iter.next();
+        const next = iter.next();
         if (next.done) {
             throw new Error("Reached the end of the iterable.");
         }
@@ -30,9 +124,8 @@ export function* takeExact(iter, amount) {
     }
 }
 export function* takeExactOrZero(iter, amount) {
-    const _iter = iterify(iter);
     for (let i = 0; i < amount; i++) {
-        const next = _iter.next();
+        const next = iter.next();
         if (next.done) {
             if (i !== 0) {
                 throw new Error("Reached the end of the iterable.");
@@ -44,32 +137,46 @@ export function* takeExactOrZero(iter, amount) {
         yield next.value;
     }
 }
-export function* blocks(array, size) {
+export function* takeWhile(iter, predicate) {
+    let i = 0;
     while (true) {
-        const val = collect(take(array, size));
+        const next = iter.next();
+        if (next.done || !predicate(next.value, i)) {
+            return;
+        }
+        yield next.value;
+        i++;
+    }
+}
+export function* blocks(iter, size) {
+    while (true) {
+        const val = collect(take(iter, size));
         if (val.length === 0) {
             return;
         }
-        yield val;
+        yield iterify(val);
     }
 }
-export function* blocksExact(array, size) {
+export function* blocksExact(iter, size) {
     try {
         while (true) {
-            const val = collect(takeExactOrZero(array, size));
+            const val = collect(takeExactOrZero(iter, size));
             if (val.length === 0) {
                 return;
             }
-            yield val;
+            yield iterify(val);
         }
     }
     catch {
         throw new Error("The length of the iterable must be a multiple of the size");
     }
 }
-export function pairs(array) {
-    return blocks(array, 2);
+export function* blocksFill(iter, size, fill) {
+    yield* mapIter(blocks(iter, size), fillExact, size, fill);
 }
-export function pairsExact(array) {
-    return blocksExact(array, 2);
+export function pairs(iter) {
+    return blocks(iter, 2);
+}
+export function pairsExact(iter) {
+    return blocksExact(iter, 2);
 }

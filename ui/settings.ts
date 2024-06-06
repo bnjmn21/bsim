@@ -5,6 +5,7 @@ import * as icons from "../icons.js";
 import { Value, signals } from "../jsml/signals.js";
 import { effectAndInit, settings } from "../bsim.js";
 import { saveSettings } from "../persistency.js";
+import { showInputEvents } from "./debug_view.js";
 
 export const showSettings = signals.value(false);
 effectAndInit(showSettings, () => {
@@ -91,6 +92,10 @@ export function settingsPlugin(world: World) {
                     option(ui, () => I18N[LANG.get()].SETTINGS.SHOW, settings.advanced.perf_graph, true);
                 });
                 note(ui, () => I18N[LANG.get()].SETTINGS.PERF_GRAPH_NOTE);
+                setting(ui, () => I18N[LANG.get()].SETTINGS.INPUT_EVENTS, ui => {
+                    option(ui, () => I18N[LANG.get()].SETTINGS.HIDE, showInputEvents, false);
+                    option(ui, () => I18N[LANG.get()].SETTINGS.SHOW, showInputEvents, true);
+                });
             });
         }).class("settings-main");
     });
