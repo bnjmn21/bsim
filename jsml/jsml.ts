@@ -1,3 +1,4 @@
+import { flat, iterify, join, map } from "../engine/itertools.js";
 import { Signals, Signal, isSignal, signals, directEffect} from "./signals.js"
 
 function unreachable(): never {
@@ -154,7 +155,7 @@ class Tag implements UiElement {
     classList: string[] = [];
     eventListeners: TagEventListener<any>[] = [];
     attributes: Map<string, string> = new Map();
-    styles: Map<CSSProp, string | Signal<string>> = new Map();
+    styles: Map<string, string | Signal<string>> = new Map();
     thenFns: ((element: HTMLElement) => void)[] = [];
     classIfList: [string, Signal<boolean> | (() => boolean)][] = [];
 
@@ -186,7 +187,7 @@ class Tag implements UiElement {
     }
 
     style(name: CSSProp, value: string | Signal<string>) {
-        this.styles.set(name, value);
+        this.styles.set(join(flat(map(iterify(name), v => v === v.toUpperCase() ? iterify(["-", v]) : iterify(v)))), value);
         return this;
     }
 
@@ -254,10 +255,10 @@ class TagVNode implements VNode {
     htmlElement: HTMLElement;
     inner: VNode[] = [];
     focusSignal: Signal<boolean> | undefined;
-    styles: Map<CSSProp, Signal<string>>;
+    styles: Map<string, Signal<string>>;
     classIfList: [string, Signal<boolean>][];
 
-    constructor (ui: UiConsumer, signals: Signal<any>[], htmlElement: HTMLElement, inner: VNode[], styles: Map<CSSProp, Signal<string>>, classIfList: [string, Signal<boolean>][]) {
+    constructor (ui: UiConsumer, signals: Signal<any>[], htmlElement: HTMLElement, inner: VNode[], styles: Map<string, Signal<string>>, classIfList: [string, Signal<boolean>][]) {
         this.ui = ui;
         this.signals = signals;
         this.htmlElement = htmlElement;

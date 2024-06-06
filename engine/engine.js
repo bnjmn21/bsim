@@ -115,7 +115,7 @@ export class Camera2d {
         this.scale = initalScale;
         this.mousePos = new Vec2(0);
         this.rawScale = 1;
-        addEventListener("mousemove", e => {
+        addEventListener("pointermove", e => {
             this.mousePos = new Vec2(e.clientX, e.clientY);
         });
     }

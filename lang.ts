@@ -24,6 +24,7 @@ export const I18N = {
             DEBUG_DISPLAY: "FPS graph",
             PERF_GRAPH: "Performance graph",
             PERF_GRAPH_NOTE: "Performance graph might not work correctly on all browsers.\nIn Firefox the privacy.reduceTimerPrecision flag must be set to false",
+            INPUT_EVENTS: "Input Events",
 
             HIGH: "High",
             LOW: "Low",
@@ -86,7 +87,7 @@ export const I18N = {
             JSON_NOTE: "Human-readable file format",
             FILE_NAME: "File name",
             DOWNLOAD: "Download",
-        }
+        },
     },
     de_de: {
         NAME: "BSim",
@@ -111,6 +112,7 @@ export const I18N = {
             DEBUG_DISPLAY: "FPS-Graph",
             PERF_GRAPH: "Performance-Graph",
             PERF_GRAPH_NOTE: `Der Performance-Graph funktioniert evtl. nicht in allen Browsern.\nIn Firefox muss die Flag "privacy.reduceTimerPrecision" auf false gesetzt werden.`,
+            INPUT_EVENTS: "Eingabe-Events",
 
             HIGH: "Hoch",
             LOW: "Niedrig",

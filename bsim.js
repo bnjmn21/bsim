@@ -128,7 +128,7 @@ export function bsim(world) {
             keys.meta.set(false);
         }
     });
-    addEventListener("mousemove", e => {
+    addEventListener("pointermove", e => {
         const unroundedPos = camera.mouseWorldCoords();
         const roundedPos = new Vec2(Math.round(unroundedPos.x / GRID_SIZE) * GRID_SIZE, Math.round(unroundedPos.y / GRID_SIZE) * GRID_SIZE);
         if (dragging.inner?.type === "new") {
@@ -144,7 +144,7 @@ export function bsim(world) {
         hoverState.block.set((!!hoveringBlock) && !(hoveringBlock?.block instanceof WireNode));
         hoverState.outputNode.set(!!getHoveringOutputNode(world, camera));
     });
-    canvas.canvas.addEventListener("mousedown", e => {
+    canvas.canvas.addEventListener("pointerdown", e => {
         if (e.button === 0) {
             if (keys.alt.get() && (!(keys.ctrl.get() || keys.meta.get()))) {
                 const hoveringInputNode = getConnectedHoveringInputNode(world, camera);
@@ -184,7 +184,7 @@ export function bsim(world) {
             }
         }
     });
-    addEventListener("mouseup", e => {
+    addEventListener("pointerup", e => {
         if (dragging.inner?.type === "new") {
             if (dragging.inner.block) {
                 if (e.target !== canvas.canvas) {
@@ -385,7 +385,7 @@ export function bsim(world) {
             }
         })[0];
     });
-    addEventListener("mousemove", e => {
+    addEventListener("pointermove", e => {
         if (e.target === document.getElementById("block-menu") && (dragging.inner?.type === "move" || dragging.inner?.type === "new")) {
             mouseTooltip.set("delete");
         }
@@ -435,14 +435,11 @@ export function bsim(world) {
         })[0];
     });
     if (new URL(location.href).searchParams.has("d")) {
-        try {
-            const circuit = loadCircuitFromLink(new URL(location.href));
-            if (circuit.name) {
-                circuitName.set(circuit.name);
-            }
-            circuit.load(world, camera, new Vec2(0, 0));
+        const circuit = loadCircuitFromLink(new URL(location.href));
+        if (circuit.name) {
+            circuitName.set(circuit.name);
         }
-        catch { }
+        circuit.load(world, camera, new Vec2(0, 0));
     }
 }
 function drawGrid(camera, canvas) {
