@@ -1,7 +1,12 @@
 import { overlayCanvas, settings } from "../bsim.js";
+import { RGB, color_mix } from "../engine/colors.js";
 import { Plugins } from "../engine/ecs.js";
 import { Vec2 } from "../engine/engine.js";
 import { LineGraph, PieGraph } from "../engine/graphs.js";
+import { signals } from "../jsml/signals.js";
+export const showInputEvents = signals.value(false);
+const pointers = new Map();
+const events = [];
 export const perfData = {
     render: {
         total: 0,
@@ -105,6 +110,61 @@ export function debugViewPlugin(world) {
                 ctx.fillText("[i] Toggle idle time", overlayCanvas.size().x - 200, overlayCanvas.size().y - 20);
             }
             perfData.last_idle_start = time.ms();
+        }
+    });
+    addEventListener("pointerdown", e => {
+        if (!showInputEvents.get()) {
+            return;
+        }
+        pointers.set(e.pointerId, e);
+        events.push([time.s(), e]);
+    });
+    addEventListener("pointermove", e => {
+        if (!showInputEvents.get()) {
+            return;
+        }
+        pointers.set(e.pointerId, e);
+        events.push([time.s(), e]);
+    });
+    addEventListener("pointerup", e => {
+        if (!showInputEvents.get()) {
+            return;
+        }
+        pointers.delete(e.pointerId);
+        events.push([time.s(), e]);
+    });
+    addEventListener("pointercancel", e => {
+        if (!showInputEvents.get()) {
+            return;
+        }
+        pointers.delete(e.pointerId);
+        events.push([time.s(), e]);
+    });
+    world.system(AfterLoop, [], _ => {
+        if (!showInputEvents.get()) {
+            return;
+        }
+        const ctx = overlayCanvas.context2d;
+        ctx.font = `20px "JetBrains Mono", monospace`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        for (const ptr of pointers.values()) {
+            ctx.fillStyle = color_mix(ptr.pressure, ptr.isPrimary ? new RGB(255, 255, 255) : new RGB(100, 100, 100), new RGB(255, 0, 0)).toCSS();
+            ctx.beginPath();
+            ctx.arc(ptr.x, ptr.y, 40 + ((ptr.width + ptr.height) / 4), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText(`buttons: ${ptr.buttons}, type: ${ptr.pointerType}`, ptr.x + 100, ptr.y + 100);
+        }
+        ctx.font = `20px "JetBrains Mono", monospace`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "bottom";
+        let i = 0;
+        for (const e of [...events].reverse()) {
+            if ((e[0] - time.s()) < 1) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${1 - (time.s() - e[0])})`;
+                ctx.fillText(`${e[1].type.padStart(12, " ")}:${e[1].x.toString().padStart(4, " ")},${e[1].y.toString().padStart(4, " ")}`, 0, overlayCanvas.size().y - (i * 20));
+                i++;
+            }
         }
     });
 }

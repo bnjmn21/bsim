@@ -1,5 +1,5 @@
 import { Signal, directEffect, signals } from "./jsml/signals.js";
-import { Plugins, World } from "./engine/ecs.js";
+import { Plugins, Time, World } from "./engine/ecs.js";
 import { Camera2d, Canvas, CanvasObject, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
 import { I18N, LANG } from "./lang.js";
 import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode, BlockDef, Hitbox, NodeRef, Delay, WireNode, Not } from "./blocks.js";
@@ -14,6 +14,7 @@ import { keyboardTipsPlugin } from "./ui/keyboard_tips.js";
 import { controlsPlugin } from "./ui/controls.js";
 import { loadCircuitFromLink, loadSettings } from "./persistency.js";
 import { b64Decode, b64Encode } from "./engine/binary.js";
+import { RGB, color_mix } from "./engine/colors.js";
 
 export const settings = loadSettings();
 effectAndInit(settings.graphics.blur, () => {
