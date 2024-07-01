@@ -1,3 +1,4 @@
+import { deselectAll } from "../blocks.js";
 import { blocks, dragging, settings } from "../bsim.js";
 import { Canvas, Vec2 } from "../engine/engine.js";
 import { JSML } from "../jsml/jsml.js";
@@ -26,7 +27,7 @@ export function blockMenuPlugin(world) {
                                         block.staticData.menuRender(ctx);
                                     }
                                     else {
-                                        block.staticData.default().render(ctx);
+                                        block.staticData.default().render(ctx, false);
                                     }
                                 });
                             });
@@ -36,6 +37,7 @@ export function blockMenuPlugin(world) {
                         .class("block")
                         .attribute("data-name", I18N[LANG.get()].BLOCKS[block.staticData.name])
                         .addEventListener("mousedown", e => {
+                        deselectAll(world);
                         dragging.inner = {
                             type: "new",
                             block: block.staticData,

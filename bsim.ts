@@ -2,7 +2,7 @@ import { Signal, directEffect, signals } from "./jsml/signals.js";
 import { Plugins, Time, World } from "./engine/ecs.js";
 import { Camera2d, Canvas, CanvasObject, Transform, Vec2, render2dPlugin } from "./engine/engine.js";
 import { I18N, LANG } from "./lang.js";
-import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode, BlockDef, Hitbox, NodeRef, Delay, WireNode, Not } from "./blocks.js";
+import { And, Or, Xor, Toggle, LED, Block, circuitPlugin, OutputNode, InputNode, BlockDef, Hitbox, NodeRef, Delay, WireNode, Not, getSelectedBlocks, deselectAll, Circuit } from "./blocks.js";
 import { blockMenuPlugin } from "./ui/block_menu.js";
 import { titleBarPlugin } from "./ui/title_bar.js";
 import { debugViewPlugin, perfData, timed } from "./ui/debug_view.js";
@@ -13,8 +13,7 @@ import { garbage } from "./icons.js";
 import { keyboardTipsPlugin } from "./ui/keyboard_tips.js";
 import { controlsPlugin } from "./ui/controls.js";
 import { loadCircuitFromLink, loadSettings } from "./persistency.js";
-import { b64Decode, b64Encode } from "./engine/binary.js";
-import { RGB, color_mix } from "./engine/colors.js";
+import { selectionToolsPlugin, selectionW, selectionX, selectionY, showSelectionTools } from "./ui/selection_tools.js";
 
 export const settings = loadSettings();
 effectAndInit(settings.graphics.blur, () => {
@@ -55,8 +54,14 @@ export const overlayCanvas = new Canvas(document.getElementById("overlay-canvas"
 export type DraggingNewBlock = {type: "new", block: BlockDef, pos: Vec2};
 export type MovingBlock = {type: "move", block: Block};
 export type DraggingWire = {type: "wire", from: NodeRef};
-export const dragging: {inner: DraggingNewBlock | MovingBlock | DraggingWire | null} = {
+export type CreatingSelection = {type: "selection", start: Vec2};
+export type MovingSelection = {type: "moveSelection", start: Vec2, blockPositions: Vec2[], initialSelFrame: {pos1: Vec2, pos2: Vec2}};
+export const dragging: {inner: DraggingNewBlock | MovingBlock | DraggingWire | CreatingSelection | MovingSelection | null} = {
     inner: null, //Inner mutability
+};
+
+export const selectionFrame: {inner: {pos1: Vec2, pos2: Vec2} | null} = {
+    inner: null
 };
 
 export const mouseTooltip = signals.value<null | "delete">(null);
@@ -87,17 +92,17 @@ export function bsim(world: World) {
     world.system(Loop, [], () => {
        overlayCanvas.context2d.clearRect(0, 0, overlayCanvas.size().x, overlayCanvas.size().y);
     });
-
+    
+    const camera = new Camera2d(canvas.size().div(new Vec2(2)).invert(), new Vec2(1));
     world.plugin(debugViewPlugin);
-    world.plugin(circuitPlugin);
+    world.plugin(titleBarPlugin, camera);
+    world.plugin(circuitPlugin, camera);
+    world.plugin(selectionToolsPlugin, camera);
     world.plugin(render2dPlugin);
     world.plugin(blockMenuPlugin);
     world.plugin(settingsPlugin);
     world.plugin(keyboardTipsPlugin);
     world.plugin(controlsPlugin);
-    
-    const camera = new Camera2d(canvas.size().div(new Vec2(2)).invert(), new Vec2(1));
-    world.plugin(titleBarPlugin, camera);
 
     world.system(Loop, [], _ => {
         if (hoverState.inputNode.get() || hoverState.outputNode.get()) {
@@ -113,7 +118,6 @@ export function bsim(world: World) {
         }
     });
 
-    let bin: Uint8Array;
     addEventListener("keydown", e => {
         if (e.key === "Control") {
             keys.ctrl.set(true);
@@ -147,6 +151,18 @@ export function bsim(world: World) {
         if (dragging.inner?.type === "move") {
             dragging.inner.block.pos.set(roundedPos);
         }
+        if (dragging.inner?.type === "moveSelection") {
+            const unroundedPos = camera.mouseWorldCoords().sub(dragging.inner.start);
+            const roundedPos = new Vec2(Math.round(unroundedPos.x / GRID_SIZE) * GRID_SIZE, Math.round(unroundedPos.y / GRID_SIZE) * GRID_SIZE);
+            let i = 0;
+            for (const block of getSelectedBlocks(world)) {
+                block.pos.set(dragging.inner.blockPositions[i].add(roundedPos));
+                i++;
+            };
+            const selFrame = selectionFrame.inner as {pos1: Vec2, pos2: Vec2};
+            selFrame.pos1 = dragging.inner.initialSelFrame.pos1.add(roundedPos);
+            selFrame.pos2 = dragging.inner.initialSelFrame.pos2.add(roundedPos);
+        }
 
         const hoveringBlock = getHoveringBlock(world, camera);
         hoverState.inputNode.set(!!getConnectedHoveringInputNode(world, camera));
@@ -158,6 +174,7 @@ export function bsim(world: World) {
 
     canvas.canvas.addEventListener("pointerdown", e => {
         if (e.button === 0) {
+            deselectAll(world);
             if (keys.alt.get() && (!(keys.ctrl.get() || keys.meta.get()))) {
                 const hoveringInputNode = getConnectedHoveringInputNode(world, camera);
                 if (hoveringInputNode) {
@@ -195,6 +212,12 @@ export function bsim(world: World) {
                     block: hoveringBlock
                 }
                 return;
+            }
+
+            showSelectionTools.set(false);
+            dragging.inner = {
+                type: "selection",
+                start: camera.mouseWorldCoords(),
             }
         }
     });
@@ -255,6 +278,27 @@ export function bsim(world: World) {
                     break;
                 }
             }
+            dragging.inner = null;
+        }
+        if (dragging.inner?.type === "selection" && e.button === 0) {
+            if (getSelectedBlocks(world).length !== 0) {
+                selectionFrame.inner = {
+                    pos1: dragging.inner.start,
+                    pos2: camera.mouseWorldCoords(),
+                }
+                showSelectionTools.set(true);
+                selectionY.set(camera.mousePos.y);
+                selectionX.set(camera.worldToScreenCoords(dragging.inner.start).x);
+                selectionW.set(camera.mousePos.x - camera.worldToScreenCoords(dragging.inner.start).x);
+            }
+            dragging.inner = null;
+        }
+        if (dragging.inner?.type === "moveSelection" && e.button === 0) {
+            showSelectionTools.set(true);
+            const selFrame = selectionFrame.inner as {pos1: Vec2, pos2: Vec2};
+            selectionY.set(camera.worldToScreenCoords(selFrame.pos2).y);
+            selectionX.set(camera.worldToScreenCoords(selFrame.pos1).x);
+            selectionW.set(camera.worldToScreenCoords(selFrame.pos2).x - camera.worldToScreenCoords(selFrame.pos1).x);
             dragging.inner = null;
         }
     });
@@ -364,8 +408,52 @@ export function bsim(world: World) {
                 if (dragging.inner.block.menuRender) {
                     dragging.inner.block.menuRender(ctx);
                 } else {
-                    dragging.inner.block.default().render(ctx);
+                    dragging.inner.block.default().render(ctx, false);
                 }
+                ctx.restore();
+            }
+        })[0];
+    });
+
+    world.system(Loop, [], _ => {
+        perfData.render.other += timed(time, () => {
+            if (dragging.inner?.type === "selection") {
+                const ctx = canvas.context2d;
+                ctx.save();
+                camera.toTransform().applyTransforms(ctx);
+                ctx.fillStyle = "#fff3";
+                ctx.strokeStyle = "#fff";
+                ctx.lineCap = "round";
+                ctx.lineWidth = GRID_SIZE / 16;
+                ctx.beginPath();
+                ctx.roundRect(
+                    dragging.inner.start.x,
+                    dragging.inner.start.y,
+                    camera.mouseWorldCoords().sub(dragging.inner.start).x,
+                    camera.mouseWorldCoords().sub(dragging.inner.start).y,
+                    5
+                );
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            }
+            if (selectionFrame.inner !== null) {
+                const ctx = canvas.context2d;
+                ctx.save();
+                camera.toTransform().applyTransforms(ctx);
+                ctx.fillStyle = "#77f3";
+                ctx.strokeStyle = "#fff7";
+                ctx.lineCap = "round";
+                ctx.lineWidth = GRID_SIZE / 16;
+                ctx.beginPath();
+                ctx.roundRect(
+                    selectionFrame.inner.pos1.x,
+                    selectionFrame.inner.pos1.y,
+                    selectionFrame.inner.pos2.sub(selectionFrame.inner.pos1).x,
+                    selectionFrame.inner.pos2.sub(selectionFrame.inner.pos1).y,
+                    5
+                );
+                ctx.stroke();
                 ctx.restore();
             }
         })[0];
@@ -532,6 +620,29 @@ function hitbox(hb: Hitbox, target: Vec2) {
     } else if (hb.type === "rect") {
         return rectHitbox(hb.pos, hb.pos.add(hb.size), target);
     }
+}
+
+function rectToRectHibox(rect1: {pos1: Vec2, pos2: Vec2}, rect2: {pos1: Vec2, pos2: Vec2}) {
+    return rect1.pos1.x < rect2.pos2.x &&
+           rect1.pos2.x > rect2.pos1.x &&
+           rect1.pos1.y < rect2.pos2.y &&
+           rect1.pos2.y > rect2.pos1.y
+}
+
+function circleToRectHitbox(circle: {pos: Vec2, radius: number}, rect: {pos1: Vec2, pos2: Vec2}) {
+    return rect.pos1.x < circle.pos.x + circle.radius &&
+           rect.pos2.x > circle.pos.x - circle.radius &&
+           rect.pos1.y < circle.pos.y + circle.radius &&
+           rect.pos2.y > circle.pos.y - circle.radius
+}
+
+export function hitboxToRect(hb: Hitbox, rect: {pos1: Vec2, pos2: Vec2}) {
+    if (hb.type === "circle") {
+        return circleToRectHitbox({pos: hb.center, radius: hb.radius}, rect);
+    } else if (hb.type === "rect") {
+        return rectToRectHibox({pos1: hb.pos, pos2: hb.pos.add(hb.size)}, rect);
+    }
+    throw new Error()
 }
 
 function recalculate(world: World) {

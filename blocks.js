@@ -1,9 +1,10 @@
-import { blocks, circuitName, settings } from "./bsim.js";
+import { blocks, circuitName, dragging, hitboxToRect, selectionFrame, settings } from "./bsim.js";
 import { GRID_SIZE } from "./constants.js";
 import { Reader, Writer } from "./engine/binary.js";
 import { RGB, color_mix } from "./engine/colors.js";
 import { Plugins } from "./engine/ecs.js";
 import { CameraTransform, CanvasObject, SharedTranslate, Transform, Vec2 } from "./engine/engine.js";
+import { showSelectionTools } from "./ui/selection_tools.js";
 const COLORS = {
     AND: new RGB(0x00, 0xf7, 0xff),
     OR: new RGB(0xeb, 0xff, 0x00),
@@ -37,11 +38,15 @@ export class And {
         return [input.every(v => v)];
     }
     tick() { }
-    render(ctx) {
+    render(ctx, selected) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.AND.toCSS();
         ctx.strokeStyle = OUTLINE_COLOR(COLORS.AND).toCSS();
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.AND, new RGB(255, 255, 255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.AND), new RGB(255, 255, 255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
         if (settings.graphics.gate_symbols.get() === "ansi") {
             ctx.beginPath();
@@ -73,6 +78,9 @@ export class And {
     serialize() {
         return {};
     }
+    clone() {
+        return new And();
+    }
 }
 export class Or {
     static staticData = {
@@ -92,11 +100,15 @@ export class Or {
         return [input.some(v => v)];
     }
     tick() { }
-    render(ctx) {
+    render(ctx, selected) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.OR.toCSS();
         ctx.strokeStyle = OUTLINE_COLOR(COLORS.OR).toCSS();
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.OR, new RGB(255, 255, 255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.OR), new RGB(255, 255, 255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
         if (settings.graphics.gate_symbols.get() === "ansi") {
             ctx.beginPath();
@@ -130,6 +142,9 @@ export class Or {
     serialize() {
         return {};
     }
+    clone() {
+        return new Or();
+    }
 }
 export class Xor {
     static staticData = {
@@ -149,11 +164,15 @@ export class Xor {
         return [input.filter(v => v).length % 2 === 1];
     }
     tick() { }
-    render(ctx) {
+    render(ctx, selected) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.XOR.toCSS();
         ctx.strokeStyle = OUTLINE_COLOR(COLORS.XOR).toCSS();
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.XOR, new RGB(255, 255, 255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.XOR), new RGB(255, 255, 255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
         if (settings.graphics.gate_symbols.get() === "ansi") {
             ctx.beginPath();
@@ -192,6 +211,9 @@ export class Xor {
     serialize() {
         return {};
     }
+    clone() {
+        return new Xor();
+    }
 }
 export class Not {
     static staticData = {
@@ -211,11 +233,15 @@ export class Not {
         return [!input[0]];
     }
     tick(input) { }
-    render(ctx) {
+    render(ctx, selected) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.NOT.toCSS();
         ctx.strokeStyle = OUTLINE_COLOR(COLORS.NOT).toCSS();
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.NOT, new RGB(255, 255, 255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.NOT), new RGB(255, 255, 255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
         ctx.beginPath();
         ctx.moveTo(-GRID_SIZE, -GRID_SIZE / 2);
@@ -228,6 +254,9 @@ export class Not {
     }
     serialize() {
         return {};
+    }
+    clone() {
+        return new Not();
     }
 }
 export class Toggle {
@@ -261,7 +290,7 @@ export class Toggle {
     calculate(input) {
         return [this.state];
     }
-    render(ctx) {
+    render(ctx, selected) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         if (this.state) {
@@ -272,12 +301,19 @@ export class Toggle {
             ctx.fillStyle = COLORS.OFF.toCSS();
             ctx.strokeStyle = OUTLINE_COLOR(COLORS.OFF).toCSS();
         }
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.OFF, new RGB(255, 255, 255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.OFF), new RGB(255, 255, 255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
         ctx.fillRect(0, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
         ctx.strokeRect(0, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
     }
     serialize() {
         return this.state;
+    }
+    clone() {
+        return new Toggle(this.state);
     }
 }
 export class LED {
@@ -304,7 +340,7 @@ export class LED {
         this.state = input[0];
         return [];
     }
-    render(ctx) {
+    render(ctx, selected) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         if (this.state) {
@@ -315,6 +351,10 @@ export class LED {
             ctx.fillStyle = COLORS.LED.OFF.toCSS();
             ctx.strokeStyle = OUTLINE_COLOR(COLORS.LED.OFF).toCSS();
         }
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.OFF, new RGB(255, 255, 255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.LED.OFF), new RGB(255, 255, 255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
         ctx.beginPath();
         ctx.arc(GRID_SIZE / 2, 0, GRID_SIZE / 2, 0, Math.PI * 2);
@@ -323,6 +363,9 @@ export class LED {
     }
     serialize() {
         return this.state;
+    }
+    clone() {
+        return new LED(this.state);
     }
 }
 export class Delay {
@@ -340,13 +383,16 @@ export class Delay {
     listeners = [];
     ioDeps = [];
     state = false;
+    constructor(state) {
+        this.state = state || false;
+    }
     calculate(input) {
         return [this.state];
     }
     tick(input) {
         this.state = input[0];
     }
-    render(ctx) {
+    render(ctx, selected) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.DELAY.toCSS();
@@ -361,6 +407,9 @@ export class Delay {
         ctx.fillText("t", -GRID_SIZE / 2, 0);
     }
     serialize() { }
+    clone() {
+        return new Delay(this.state);
+    }
 }
 export class WireNode {
     static staticData = {
@@ -396,6 +445,9 @@ export class WireNode {
     serialize() {
         return {};
     }
+    clone() {
+        return new WireNode();
+    }
 }
 export class Block {
     inputs;
@@ -406,6 +458,7 @@ export class Block {
     pos;
     inputNodeEntities = [];
     outputNodeEntities = [];
+    selected = false;
     constructor(inputs, block, pos) {
         this.inputs = inputs;
         this.output = null;
@@ -483,7 +536,7 @@ export class Block {
             this.pos.add(nodeTransform);
             this.inputNodeEntities.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
         }
-        world.spawn([this, transform, new CameraTransform(camera), new CanvasObject(ctx => this.block.render(ctx))]);
+        world.spawn([this, transform, new CameraTransform(camera), new CanvasObject(ctx => this.block.render(ctx, this.selected))]);
     }
     tick() {
         const inputs = [];
@@ -579,7 +632,7 @@ export class InputNode {
         ctx.stroke();
     }
 }
-export function circuitPlugin(world) {
+export function circuitPlugin(world, camera) {
     const { time, Loop } = world.plugin(Plugins.time);
     world.system(Loop, OutputNode, entities => {
         for (const e of entities) {
@@ -597,6 +650,15 @@ export function circuitPlugin(world) {
             }
             else {
                 input.state = inputVal.block.getOutput()[inputVal.outputId];
+            }
+        }
+    });
+    world.system(Loop, Block, entities => {
+        if (dragging.inner?.type === "selection") {
+            const selectionP1 = new Vec2(Math.min(dragging.inner.start.x, camera.mouseWorldCoords().x), Math.min(dragging.inner.start.y, camera.mouseWorldCoords().y));
+            const selectionP2 = new Vec2(Math.max(dragging.inner.start.x, camera.mouseWorldCoords().x), Math.max(dragging.inner.start.y, camera.mouseWorldCoords().y));
+            for (const e of entities) {
+                e(Block).selected = hitboxToRect(e(Block).block.data.hitbox, { pos1: selectionP1.sub(e(Block).pos.pos), pos2: selectionP2.sub(e(Block).pos.pos) });
             }
         }
     });
@@ -644,14 +706,14 @@ export class Circuit {
                     }
                 }
             }
-            circuit.blocks.push(new CircuitBlock(block.block, block.pos.pos.clone(), inputs));
+            circuit.blocks.push(new CircuitBlock(block.block.clone(), block.pos.pos.clone(), inputs));
         }
         return circuit;
     }
     static saveCircuit(world) {
         return Circuit.fromBlocks(getBlocks(world), circuitName.get(), "throw");
     }
-    load(world, camera, pos) {
+    load(world, camera, pos, addToSelection = false) {
         const newBlocks = [];
         for (const block of this.blocks) {
             const inputs = [];
@@ -664,6 +726,9 @@ export class Circuit {
                 }
             }
             const newBlock = new Block(inputs, block.block, block.pos.add(pos));
+            if (addToSelection) {
+                newBlock.selected = true;
+            }
             newBlock.render(world, camera);
             newBlocks.push(newBlock);
         }
@@ -784,14 +849,22 @@ export class Circuit {
         throw new Error("Invalid circuit binary version");
     }
 }
-function getBlocks(world) {
+export function getBlocks(world) {
     return world.getEntities(Block).map(v => v(Block));
+}
+export function getSelectedBlocks(world) {
+    return world.getEntities(Block).map(v => v(Block)).filter(v => v.selected);
 }
 export function isEmpty(world) {
     return getBlocks(world).length === 0;
 }
 export function deleteAllBlocks(world) {
     getBlocks(world).forEach(b => b.remove(world));
+}
+export function deselectAll(world) {
+    showSelectionTools.set(false);
+    selectionFrame.inner = null;
+    getSelectedBlocks(world).forEach(v => v.selected = false);
 }
 function getBlockId(b) {
     for (const [catName, category] of Object.entries(blocks)) {

@@ -333,3 +333,26 @@ input[type=text][disabled] {
 #controls input[type=range] {
     cursor: ew-resize;
 }
+
+#selection-tools-container {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.selection-tools {
+    border: 1px solid var(--glass-border);
+    border-radius: 4px;
+    background: var(--glass);
+    backdrop-filter: var(--glass-backdrop-filter);
+    display: flex;
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, .5rem);
+}
+
+.selection-tools.show {
+    opacity: 1;
+    pointer-events: all;
+}

@@ -1,10 +1,11 @@
-import { blocks, circuitName, settings } from "./bsim.js";
+import { blocks, circuitName, dragging, hitboxToRect, selectionFrame, settings } from "./bsim.js";
 import { GRID_SIZE } from "./constants.js";
 import { Reader, Writer } from "./engine/binary.js";
 import { Color, RGB, color_mix } from "./engine/colors.js";
 import { Constructor, EntityWrapper, Plugins, World } from "./engine/ecs.js";
 import { Camera2d, CameraTransform, CanvasObject, SharedTranslate, Transform, Vec2, lerp } from "./engine/engine.js";
 import { I18N } from "./lang.js";
+import { showSelectionTools } from "./ui/selection_tools.js";
 
 const COLORS = {
     AND: new RGB(0x00, 0xf7, 0xff),
@@ -42,11 +43,12 @@ export interface IBlock {
     inputNodes: Vec2[];
     outputNodes: Vec2[];
     calculate(input: boolean[]): boolean[];
-    render(ctx: CanvasRenderingContext2D): void;
+    render(ctx: CanvasRenderingContext2D, selected: boolean): void;
     tick(input: boolean[]): void;
     listeners: ClickListener[];
     ioDeps: number[];
     serialize(): any;
+    clone(): IBlock;
 
     data: BlockDef;
 }
@@ -72,11 +74,15 @@ export class And implements IBlock {
 
     tick(): void {}
 
-    render(ctx: CanvasRenderingContext2D) {
+    render(ctx: CanvasRenderingContext2D, selected: boolean) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.AND.toCSS();
         ctx.strokeStyle = OUTLINE_COLOR(COLORS.AND).toCSS();
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.AND, new RGB(255,255,255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.AND), new RGB(255,255,255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
 
         if (settings.graphics.gate_symbols.get() === "ansi") {
@@ -109,6 +115,10 @@ export class And implements IBlock {
     serialize() {
         return {};
     }
+
+    clone(): IBlock {
+        return new And();
+    }
 }
 
 export class Or implements IBlock {
@@ -132,11 +142,15 @@ export class Or implements IBlock {
 
     tick(): void {}
 
-    render(ctx: CanvasRenderingContext2D): void {
+    render(ctx: CanvasRenderingContext2D, selected: boolean): void {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.OR.toCSS();
         ctx.strokeStyle = OUTLINE_COLOR(COLORS.OR).toCSS();
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.OR, new RGB(255,255,255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.OR), new RGB(255,255,255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
 
         if (settings.graphics.gate_symbols.get() === "ansi") {
@@ -171,6 +185,10 @@ export class Or implements IBlock {
     serialize() {
         return {};
     }
+
+    clone(): IBlock {
+        return new Or();
+    }
 }
 
 export class Xor implements IBlock {
@@ -194,11 +212,15 @@ export class Xor implements IBlock {
 
     tick(): void {}
 
-    render(ctx: CanvasRenderingContext2D): void {
+    render(ctx: CanvasRenderingContext2D, selected: boolean): void {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.XOR.toCSS();
         ctx.strokeStyle = OUTLINE_COLOR(COLORS.XOR).toCSS();
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.XOR, new RGB(255,255,255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.XOR), new RGB(255,255,255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
 
         if (settings.graphics.gate_symbols.get() === "ansi") {
@@ -238,6 +260,10 @@ export class Xor implements IBlock {
     serialize() {
         return {};
     }
+
+    clone(): IBlock {
+        return new Xor();
+    }
 }
 
 export class Not implements IBlock {
@@ -262,11 +288,15 @@ export class Not implements IBlock {
 
     tick(input: boolean[]): void {}
 
-    render(ctx: CanvasRenderingContext2D) {
+    render(ctx: CanvasRenderingContext2D, selected: boolean) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.NOT.toCSS();
         ctx.strokeStyle = OUTLINE_COLOR(COLORS.NOT).toCSS();
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.NOT, new RGB(255,255,255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.NOT), new RGB(255,255,255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
         ctx.beginPath();
         ctx.moveTo(-GRID_SIZE, -GRID_SIZE / 2);
@@ -280,6 +310,10 @@ export class Not implements IBlock {
     
     serialize() {
         return {};
+    }
+
+    clone(): IBlock {
+        return new Not();
     }
 }
 
@@ -319,7 +353,7 @@ export class Toggle implements IBlock {
         return [this.state];
     }
 
-    render(ctx: CanvasRenderingContext2D): void {
+    render(ctx: CanvasRenderingContext2D, selected: boolean): void {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         if (this.state) {
@@ -329,6 +363,10 @@ export class Toggle implements IBlock {
             ctx.fillStyle = COLORS.OFF.toCSS();
             ctx.strokeStyle = OUTLINE_COLOR(COLORS.OFF).toCSS();
         }
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.OFF, new RGB(255,255,255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.OFF), new RGB(255,255,255)).toCSS();
+        }
         ctx.lineWidth = OUTLINE_WIDTH;
         ctx.fillRect(0, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
         ctx.strokeRect(0, -GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
@@ -336,6 +374,10 @@ export class Toggle implements IBlock {
     
     serialize() {
         return this.state;
+    }
+
+    clone(): IBlock {
+        return new Toggle(this.state);
     }
 }
 
@@ -368,7 +410,7 @@ export class LED implements IBlock {
         return [];
     }
 
-    render(ctx: CanvasRenderingContext2D): void {
+    render(ctx: CanvasRenderingContext2D, selected: boolean): void {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         if (this.state) {
@@ -377,6 +419,10 @@ export class LED implements IBlock {
         } else {
             ctx.fillStyle = COLORS.LED.OFF.toCSS();
             ctx.strokeStyle = OUTLINE_COLOR(COLORS.LED.OFF).toCSS();
+        }
+        if (selected) {
+            ctx.fillStyle = color_mix(0.5, COLORS.OFF, new RGB(255,255,255)).toCSS();
+            ctx.strokeStyle = color_mix(0.5, OUTLINE_COLOR(COLORS.LED.OFF), new RGB(255,255,255)).toCSS();
         }
         ctx.lineWidth = OUTLINE_WIDTH;
         ctx.beginPath();
@@ -387,6 +433,10 @@ export class LED implements IBlock {
 
     serialize() {
         return this.state;
+    }
+
+    clone(): IBlock {
+        return new LED(this.state);
     }
 }
 
@@ -407,6 +457,9 @@ export class Delay implements IBlock {
     ioDeps: number[] = [];
 
     state: boolean = false;
+    constructor (state: boolean | void) {
+        this.state = state || false;
+    }
 
     calculate(input: boolean[]): boolean[] {
         return [this.state];
@@ -416,7 +469,7 @@ export class Delay implements IBlock {
         this.state = input[0];
     }
 
-    render(ctx: CanvasRenderingContext2D) {
+    render(ctx: CanvasRenderingContext2D, selected: boolean) {
         ctx.lineCap = "butt";
         ctx.lineJoin = "miter";
         ctx.fillStyle = COLORS.DELAY.toCSS();
@@ -432,6 +485,10 @@ export class Delay implements IBlock {
     }
 
     serialize() {}
+    
+    clone(): IBlock {
+        return new Delay(this.state);
+    }
 }
 
 export class WireNode implements IBlock {
@@ -474,6 +531,10 @@ export class WireNode implements IBlock {
     serialize() {
         return {};
     }
+    
+    clone(): IBlock {
+        return new WireNode();
+    }
 }
 
 export type NodeRef = {block: Block, outputId: number};
@@ -488,6 +549,7 @@ export class Block {
     pos: SharedTranslate;
     inputNodeEntities: EntityWrapper<Constructor<InputNode | Transform | CameraTransform | CanvasObject>>[] = [];
     outputNodeEntities: EntityWrapper<Constructor<OutputNode | Transform | CameraTransform | CanvasObject>>[] = [];
+    selected: boolean = false;
 
     constructor (inputs: NodeOrValue[], block: IBlock, pos: Vec2) {
         this.inputs = inputs;
@@ -568,7 +630,7 @@ export class Block {
             this.pos.add(nodeTransform);
             this.inputNodeEntities.push(world.spawn([node[1], nodeTransform, new CameraTransform(camera), new CanvasObject(ctx => node[1].render(ctx))]));
         }
-        world.spawn([this, transform, new CameraTransform(camera), new CanvasObject(ctx => this.block.render(ctx))]);
+        world.spawn([this, transform, new CameraTransform(camera), new CanvasObject(ctx => this.block.render(ctx, this.selected))]);
     }
 
     tick() {
@@ -675,7 +737,7 @@ export class InputNode {
     }
 }
 
-export function circuitPlugin(world: World) {
+export function circuitPlugin(world: World, camera: Camera2d) {
     const { time, Loop } = world.plugin(Plugins.time);
     world.system(Loop, OutputNode, entities => {
         for (const e of entities) {
@@ -692,6 +754,16 @@ export function circuitPlugin(world: World) {
                 input.state = inputVal;
             } else {
                 input.state = inputVal.block.getOutput()[inputVal.outputId];
+            }
+        }
+    });
+    world.system(Loop, Block, entities => {
+        if (dragging.inner?.type === "selection") {
+            const selectionP1 = new Vec2(Math.min(dragging.inner.start.x, camera.mouseWorldCoords().x), Math.min(dragging.inner.start.y, camera.mouseWorldCoords().y));
+            const selectionP2 = new Vec2(Math.max(dragging.inner.start.x, camera.mouseWorldCoords().x), Math.max(dragging.inner.start.y, camera.mouseWorldCoords().y));
+            for (const e of entities) {
+                e(Block).selected = hitboxToRect(e(Block).block.data.hitbox, {pos1: selectionP1.sub(e(Block).pos.pos), pos2: selectionP2.sub(e(Block).pos.pos)});
+
             }
         }
     });
@@ -742,7 +814,7 @@ export class Circuit {
                     }
                 }
             }
-            circuit.blocks.push(new CircuitBlock(block.block, block.pos.pos.clone(), inputs));
+            circuit.blocks.push(new CircuitBlock(block.block.clone(), block.pos.pos.clone(), inputs));
         }
         return circuit;
     }
@@ -751,7 +823,7 @@ export class Circuit {
         return Circuit.fromBlocks(getBlocks(world), circuitName.get(), "throw");
     }
 
-    load(world: World, camera: Camera2d, pos: Vec2) {
+    load(world: World, camera: Camera2d, pos: Vec2, addToSelection: boolean = false) {
         const newBlocks: Block[] = [];
         for (const block of this.blocks) {
             const inputs: NodeOrValue[] = [];
@@ -763,6 +835,9 @@ export class Circuit {
                 }
             }
             const newBlock = new Block(inputs, block.block, block.pos.add(pos));
+            if (addToSelection) {
+                newBlock.selected = true;
+            }
             newBlock.render(world, camera);
             newBlocks.push(newBlock);
         }
@@ -882,8 +957,12 @@ export class Circuit {
     }
 }
 
-function getBlocks(world: World): Block[] {
+export function getBlocks(world: World): Block[] {
     return world.getEntities(Block).map(v => v(Block));
+}
+
+export function getSelectedBlocks(world: World): Block[] {
+    return world.getEntities(Block).map(v => v(Block)).filter(v => v.selected);
 }
 
 export function isEmpty(world: World): boolean {
@@ -892,6 +971,12 @@ export function isEmpty(world: World): boolean {
 
 export function deleteAllBlocks(world: World) {
     getBlocks(world).forEach(b => b.remove(world));
+}
+
+export function deselectAll(world: World) {
+    showSelectionTools.set(false);
+    selectionFrame.inner = null;
+    getSelectedBlocks(world).forEach(v => v.selected = false);
 }
 
 function getBlockId(b: IBlock): string {
