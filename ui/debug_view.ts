@@ -149,7 +149,7 @@ export function debugViewPlugin(world: World) {
             ctx.beginPath();
             ctx.arc(ptr.x, ptr.y, 40 + ((ptr.width + ptr.height) / 4), 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillText(`buttons: ${ptr.buttons}, type: ${ptr.pointerType}`, ptr.x + 100, ptr.y + 100);
+            ctx.fillText(`${ptr.button}, buttons: ${ptr.buttons}, type: ${ptr.pointerType}`, ptr.x + 100, ptr.y + 100);
         }
     
         ctx.font = `20px "JetBrains Mono", monospace`;
