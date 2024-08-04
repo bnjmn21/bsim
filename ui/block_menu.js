@@ -36,7 +36,7 @@ export function blockMenuPlugin(world) {
                     })
                         .class("block")
                         .attribute("data-name", I18N[LANG.get()].BLOCKS[block.staticData.name])
-                        .addEventListener("mousedown", e => {
+                        .addEventListener("pointerdown", e => {
                         deselectAll(world);
                         dragging.inner = {
                             type: "new",

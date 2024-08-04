@@ -208,7 +208,7 @@ export class Reader {
     }
     i8() {
         const byte = this.bytes(1)[0];
-        return (byte & 127) - (byte & 128);
+        return (byte & 0b0111_1111) - (byte & 0b1000_0000);
     }
     bool() {
         return this.bytes(1)[0] > 0;
@@ -219,7 +219,7 @@ export class Reader {
     }
     i16() {
         const bytes = this.bytes(2);
-        return (((bytes[0] & 127) << 8) + bytes[1]) - ((bytes[0] & 128) << 8);
+        return (((bytes[0] & 0b0111_1111) << 8) + bytes[1]) - ((bytes[0] & 0b1000_0000) << 8);
     }
     i32() {
         return new Int32Array(this.bytes(4).buffer)[0];
